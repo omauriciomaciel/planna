@@ -102,20 +102,20 @@ onMounted(loadLookups)
   <div>
     <!-- Page header -->
     <div class="mb-8">
-      <h1 class="text-xl font-semibold text-white/90 tracking-tight">Importar</h1>
+      <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">Importar</h1>
       <p class="text-sm text-gray-500 mt-1">Importe extratos bancários ou faturas de cartão</p>
     </div>
 
     <div class="max-w-2xl mx-auto">
 
       <!-- Import type toggle -->
-      <div class="flex rounded-xl overflow-hidden border border-white/8 mb-4 text-sm">
+      <div class="flex rounded-xl overflow-hidden border border-black/8 dark:border-white/8 mb-4 text-sm">
         <button
           type="button"
           :class="importType === 'ofx'
-            ? 'bg-white/[0.06] text-white/90'
+            ? 'bg-black/[0.06] dark:bg-white/[0.06] text-gray-900 dark:text-white/90'
             : 'text-gray-500 hover:text-gray-300'"
-          class="flex-1 flex items-center justify-center gap-2 py-3 font-medium transition-colors border-r border-white/8"
+          class="flex-1 flex items-center justify-center gap-2 py-3 font-medium transition-colors border-r border-black/8 dark:border-white/8"
           @click="() => { importType = 'ofx'; file = null }"
         >
           <UIcon name="i-heroicons-building-library" class="text-base" />
@@ -124,7 +124,7 @@ onMounted(loadLookups)
         <button
           type="button"
           :class="importType === 'csv'
-            ? 'bg-white/[0.06] text-white/90'
+            ? 'bg-black/[0.06] dark:bg-white/[0.06] text-gray-900 dark:text-white/90'
             : 'text-gray-500 hover:text-gray-300'"
           class="flex-1 flex items-center justify-center gap-2 py-3 font-medium transition-colors"
           @click="() => { importType = 'csv'; file = null }"
@@ -137,7 +137,7 @@ onMounted(loadLookups)
       <form class="space-y-3" @submit.prevent="handleImport">
 
         <!-- OFX: account select -->
-        <div v-if="importType === 'ofx'" class="rounded-xl border border-white/8 bg-white/[0.03] p-4">
+        <div v-if="importType === 'ofx'" class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-4">
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">
             Conta bancária <span class="normal-case font-normal text-gray-600">(opcional)</span>
           </label>
@@ -150,7 +150,7 @@ onMounted(loadLookups)
         </div>
 
         <!-- CSV: card + file type -->
-        <div v-else class="rounded-xl border border-white/8 bg-white/[0.03] p-4 space-y-3">
+        <div v-else class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-4 space-y-3">
           <div>
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">
               Cartão de crédito <span class="normal-case font-normal text-gray-600">(opcional)</span>
@@ -178,8 +178,8 @@ onMounted(loadLookups)
           :class="isDragging
             ? 'border-emerald-500/40 bg-emerald-500/[0.04]'
             : file
-              ? 'border-white/10 bg-white/[0.03]'
-              : 'border-white/10 bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.03]'"
+              ? 'border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03]'
+              : 'border-black/10 dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.015] hover:border-black/20 dark:hover:border-white/20 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]'"
           @click="triggerFileInput"
           @dragover.prevent="isDragging = true"
           @dragleave="isDragging = false"
@@ -191,10 +191,10 @@ onMounted(loadLookups)
               class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style="background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.15)"
             >
-              <UIcon name="i-heroicons-document-check" class="text-emerald-400 text-sm" />
+              <UIcon name="i-heroicons-document-check" class="text-emerald-600 dark:text-emerald-400 text-sm" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-white/80 truncate">{{ file.name }}</p>
+              <p class="text-sm font-medium text-gray-700 dark:text-white/80 truncate">{{ file.name }}</p>
               <p class="text-xs text-gray-500 mt-0.5">{{ (file.size / 1024).toFixed(1) }} KB · clique para trocar</p>
             </div>
             <UButton
@@ -209,11 +209,11 @@ onMounted(loadLookups)
 
           <!-- Empty state -->
           <div v-else class="flex flex-col items-center justify-center py-10 px-6 text-center">
-            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+            <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
               <UIcon name="i-heroicons-arrow-up-tray" class="text-gray-500 text-lg" />
             </div>
-            <p class="text-sm text-white/60">
-              Arraste o arquivo ou <span class="text-white/80 font-medium">clique para selecionar</span>
+            <p class="text-sm text-gray-500 dark:text-white/60">
+              Arraste o arquivo ou <span class="text-gray-700 dark:text-white/80 font-medium">clique para selecionar</span>
             </p>
             <p class="text-xs text-gray-600 mt-1">
               {{ importType === 'ofx' ? '.OFX' : fileType.value === 'csv' ? '.CSV' : '.OFX' }}

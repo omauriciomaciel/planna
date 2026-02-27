@@ -4,6 +4,8 @@ definePageMeta({ middleware: 'auth' })
 const api = useApi()
 const auth = useAuth()
 const { format } = useCurrency()
+const colorMode = useColorMode()
+const isDark = computed(() => colorMode.value === 'dark')
 
 // --- Types ---
 interface TopCategory {
@@ -120,7 +122,7 @@ const commitmentColor = computed(() => {
 })
 
 const commitmentStyle = computed(() => ({
-  background: `conic-gradient(from -90deg, ${commitmentColor.value} ${commitmentPct.value}%, rgba(255,255,255,0.06) ${commitmentPct.value}%)`,
+  background: `conic-gradient(from -90deg, ${commitmentColor.value} ${commitmentPct.value}%, ${isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} ${commitmentPct.value}%)`,
 }))
 
 // --- Category bars ---
@@ -136,21 +138,29 @@ let Plotly: any = null
 
 const PLOT_CFG = { displayModeBar: false, responsive: true }
 
-const BASE_LAYOUT = {
-  paper_bgcolor: 'transparent',
-  plot_bgcolor: 'transparent',
-  font: { color: 'rgba(255,255,255,0.35)', family: 'inherit', size: 11 },
-  hoverlabel: {
-    bgcolor: '#1f2937',
-    bordercolor: 'rgba(255,255,255,0.08)',
-    font: { color: 'rgba(255,255,255,0.9)', size: 12 },
-  },
+function getBaseLayout() {
+  const dark = isDark.value
+  return {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: {
+      color: dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)',
+      family: 'inherit',
+      size: 11,
+    },
+    hoverlabel: {
+      bgcolor: dark ? '#1f2937' : '#f9fafb',
+      bordercolor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+      font: { color: dark ? 'rgba(255,255,255,0.9)' : '#111827', size: 12 },
+    },
+  }
 }
 
 function renderHistoryChart() {
   if (!Plotly || !chartContainer.value || !history.value?.length) return
   const d = history.value
 
+  const dark = isDark.value
   Plotly.react(chartContainer.value, [
     {
       name: 'Receitas',
@@ -169,18 +179,18 @@ function renderHistoryChart() {
       hovertemplate: '<b>%{x}</b><br>Despesas: R$ %{y:,.2f}<extra></extra>',
     },
   ], {
-    ...BASE_LAYOUT,
+    ...getBaseLayout(),
     margin: { t: 8, r: 10, b: 36, l: 60 },
     barmode: 'group',
     bargap: 0.35,
     bargroupgap: 0.06,
     xaxis: {
       gridcolor: 'transparent',
-      linecolor: 'rgba(255,255,255,0.05)',
+      linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
       tickcolor: 'transparent',
     },
     yaxis: {
-      gridcolor: 'rgba(255,255,255,0.04)',
+      gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
       linecolor: 'transparent',
       tickcolor: 'transparent',
       tickprefix: 'R$',
@@ -190,7 +200,7 @@ function renderHistoryChart() {
       orientation: 'h',
       x: 0,
       y: 1.18,
-      font: { color: 'rgba(255,255,255,0.45)', size: 11 },
+      font: { color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', size: 11 },
       bgcolor: 'transparent',
     },
   }, PLOT_CFG)
@@ -223,13 +233,14 @@ function renderSankeyChart() {
     values.push(balance)
   }
 
+  const dark = isDark.value
   Plotly.react(sankeyContainer.value, [{
     type: 'sankey',
     orientation: 'h',
     node: {
       pad: 20,
       thickness: 22,
-      line: { color: 'rgba(255,255,255,0.06)', width: 0.5 },
+      line: { color: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', width: 0.5 },
       label: nodeLabels,
       color: [
         '#34d399',
@@ -242,11 +253,11 @@ function renderSankeyChart() {
       source: sources,
       target: targets,
       value: values,
-      color: sources.map(() => 'rgba(52,211,153,0.09)'),
+      color: sources.map(() => dark ? 'rgba(52,211,153,0.09)' : 'rgba(52,211,153,0.15)'),
       hovertemplate: '%{source.label} → %{target.label}<br>R$ %{value:,.2f}<extra></extra>',
     },
   }], {
-    ...BASE_LAYOUT,
+    ...getBaseLayout(),
     margin: { t: 16, r: 24, b: 16, l: 24 },
   }, PLOT_CFG)
 }
@@ -266,6 +277,10 @@ onUnmounted(() => {
 
 watch(history, renderHistoryChart)
 watch(sankey, renderSankeyChart)
+watch(isDark, () => {
+  renderHistoryChart()
+  renderSankeyChart()
+})
 
 function changeMonth(delta: number) {
   const d = new Date(currentDate.value)
@@ -279,14 +294,14 @@ function changeMonth(delta: number) {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-white/90 tracking-tight">
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">
           {{ greeting }}<span v-if="firstName">, {{ firstName }}</span>
         </h1>
-        <p class="text-sm text-white/35 mt-0.5 capitalize">{{ monthLabel }}</p>
+        <p class="text-sm text-gray-400 dark:text-white/35 mt-0.5 capitalize">{{ monthLabel }}</p>
       </div>
       <div class="flex items-center gap-0.5">
         <button
-          class="p-2 rounded-lg text-white/35 hover:text-white/70 hover:bg-white/5 transition-colors"
+          class="p-2 rounded-lg text-gray-400 dark:text-white/35 hover:text-gray-600 dark:hover:text-white/70 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           @click="changeMonth(-1)"
         >
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -294,7 +309,7 @@ function changeMonth(delta: number) {
           </svg>
         </button>
         <button
-          class="p-2 rounded-lg text-white/35 hover:text-white/70 hover:bg-white/5 transition-colors"
+          class="p-2 rounded-lg text-gray-400 dark:text-white/35 hover:text-gray-600 dark:hover:text-white/70 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
           @click="changeMonth(1)"
         >
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -307,61 +322,61 @@ function changeMonth(delta: number) {
     <!-- KPI row -->
     <div v-if="closing" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <!-- Receitas -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">Receitas</p>
-        <p class="text-2xl font-semibold text-white/90 tabular-nums leading-none">{{ format(closing.income) }}</p>
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Receitas</p>
+        <p class="text-2xl font-semibold text-gray-900 dark:text-white/90 tabular-nums leading-none">{{ format(closing.income) }}</p>
         <div v-if="incomeDelta" class="flex items-center gap-1.5 mt-2.5">
-          <span class="text-xs font-medium" :class="incomeDelta.positive ? 'text-emerald-400' : 'text-rose-400'">
+          <span class="text-xs font-medium" :class="incomeDelta.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
             {{ incomeDelta.text }}
           </span>
-          <span class="text-[11px] text-white/20">vs anterior</span>
+          <span class="text-[11px] text-gray-400 dark:text-white/20">vs anterior</span>
         </div>
       </div>
 
       <!-- Despesas -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">Despesas</p>
-        <p class="text-2xl font-semibold text-white/90 tabular-nums leading-none">{{ format(closing.expenses) }}</p>
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Despesas</p>
+        <p class="text-2xl font-semibold text-gray-900 dark:text-white/90 tabular-nums leading-none">{{ format(closing.expenses) }}</p>
         <div v-if="expensesDelta" class="flex items-center gap-1.5 mt-2.5">
-          <span class="text-xs font-medium" :class="expensesDelta.positive ? 'text-emerald-400' : 'text-rose-400'">
+          <span class="text-xs font-medium" :class="expensesDelta.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
             {{ expensesDelta.text }}
           </span>
-          <span class="text-[11px] text-white/20">vs anterior</span>
+          <span class="text-[11px] text-gray-400 dark:text-white/20">vs anterior</span>
         </div>
       </div>
 
       <!-- Saldo -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-3">Saldo</p>
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Saldo</p>
         <p
           class="text-2xl font-semibold tabular-nums leading-none"
-          :class="closing.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'"
+          :class="closing.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
         >
           {{ format(closing.balance) }}
         </p>
         <div v-if="balanceDelta" class="flex items-center gap-1.5 mt-2.5">
-          <span class="text-xs font-medium" :class="balanceDelta.positive ? 'text-emerald-400' : 'text-rose-400'">
+          <span class="text-xs font-medium" :class="balanceDelta.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
             {{ balanceDelta.text }}
           </span>
-          <span class="text-[11px] text-white/20">vs anterior</span>
+          <span class="text-[11px] text-gray-400 dark:text-white/20">vs anterior</span>
         </div>
       </div>
 
       <!-- Taxa comprometida -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-4 lg:p-5 flex items-center gap-4">
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5 flex items-center gap-4">
         <div class="relative shrink-0 w-[52px] h-[52px]">
           <div class="w-[52px] h-[52px] rounded-full" :style="commitmentStyle">
-            <div class="absolute inset-[6px] rounded-full bg-gray-900 flex items-center justify-center">
-              <span class="text-[11px] font-semibold text-white/90 tabular-nums">{{ commitmentPct.toFixed(0) }}%</span>
+            <div class="absolute inset-[6px] rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
+              <span class="text-[11px] font-semibold text-gray-900 dark:text-white/90 tabular-nums">{{ commitmentPct.toFixed(0) }}%</span>
             </div>
           </div>
         </div>
         <div class="min-w-0">
-          <p class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-1">Comprometida</p>
-          <p class="text-sm text-white/55 leading-snug">
+          <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-1">Comprometida</p>
+          <p class="text-sm text-gray-500 dark:text-white/55 leading-snug">
             {{ commitmentPct.toFixed(1) }}% da receita
           </p>
-          <p class="text-[11px] text-white/25">em despesas</p>
+          <p class="text-[11px] text-gray-400 dark:text-white/25">em despesas</p>
         </div>
       </div>
     </div>
@@ -369,18 +384,18 @@ function changeMonth(delta: number) {
     <!-- Categories + History -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Top Categories -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-5">
-        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-5">Top categorias</h2>
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-5">Top categorias</h2>
         <div v-if="closing?.top_categories?.length" class="space-y-[18px]">
           <div v-for="cat in closing.top_categories" :key="cat.name">
             <div class="flex items-baseline justify-between mb-[7px]">
               <div class="flex items-baseline gap-2 min-w-0 mr-3">
-                <span class="text-sm text-white/65 truncate">{{ cat.name }}</span>
-                <span class="text-[11px] text-white/25 shrink-0">{{ (cat.pct * 100).toFixed(0) }}%</span>
+                <span class="text-sm text-gray-500 dark:text-white/65 truncate">{{ cat.name }}</span>
+                <span class="text-[11px] text-gray-400 dark:text-white/25 shrink-0">{{ (cat.pct * 100).toFixed(0) }}%</span>
               </div>
-              <span class="text-sm font-medium text-white/85 tabular-nums shrink-0">{{ format(cat.amount) }}</span>
+              <span class="text-sm font-medium text-gray-700 dark:text-white/85 tabular-nums shrink-0">{{ format(cat.amount) }}</span>
             </div>
-            <div class="h-[3px] rounded-full bg-white/5 overflow-hidden">
+            <div class="h-[3px] rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
               <div
                 class="h-full rounded-full transition-all duration-700"
                 :style="{ width: `${(cat.pct / maxCatPct) * 100}%`, background: 'rgba(52,211,153,0.5)' }"
@@ -388,14 +403,14 @@ function changeMonth(delta: number) {
             </div>
           </div>
         </div>
-        <p v-else class="text-sm text-white/20 text-center py-10">Sem categorias neste mês</p>
+        <p v-else class="text-sm text-gray-400 dark:text-white/20 text-center py-10">Sem categorias neste mês</p>
       </div>
 
       <!-- History chart -->
-      <div class="rounded-xl border border-white/5 bg-gray-900 p-5">
-        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-4">Últimos 6 meses</h2>
+      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Últimos 6 meses</h2>
         <div ref="chartContainer" class="h-[226px]">
-          <div v-if="!history" class="h-full flex items-center justify-center text-sm text-white/20">
+          <div v-if="!history" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
             Carregando...
           </div>
         </div>
@@ -403,15 +418,15 @@ function changeMonth(delta: number) {
     </div>
 
     <!-- Sankey -->
-    <div class="rounded-xl border border-white/5 bg-gray-900 p-5">
-      <h2 class="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-2">Fluxo de caixa</h2>
+    <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+      <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-2">Fluxo de caixa</h2>
       <div ref="sankeyContainer" class="h-[370px]">
-        <div v-if="!sankey" class="h-full flex items-center justify-center text-sm text-white/20">
+        <div v-if="!sankey" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
           Carregando...
         </div>
         <div
           v-else-if="sankey && !Object.keys(sankey.categories).length"
-          class="h-full flex items-center justify-center text-sm text-white/20"
+          class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20"
         >
           Sem movimentações neste mês
         </div>
@@ -426,7 +441,7 @@ function changeMonth(delta: number) {
     >
       <div class="flex items-center gap-2 mb-4">
         <svg
-          class="w-3.5 h-3.5 text-amber-400 shrink-0"
+          class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -438,16 +453,16 @@ function changeMonth(delta: number) {
           <line x1="12" y1="9" x2="12" y2="13" />
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
-        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-amber-400/70">
+        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-400/70">
           Gastos fora do padrão
         </h2>
       </div>
       <div class="space-y-3">
         <div v-for="o in outliers" :key="o.category" class="flex items-center justify-between">
-          <span class="text-sm text-white/65">{{ o.category }}</span>
+          <span class="text-sm text-gray-500 dark:text-white/65">{{ o.category }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-xs text-white/25">esperado ~{{ format(o.expected) }}</span>
-            <span class="text-sm font-medium text-amber-400">{{ format(o.actual) }}</span>
+            <span class="text-xs text-gray-400 dark:text-white/25">esperado ~{{ format(o.expected) }}</span>
+            <span class="text-sm font-medium text-amber-600 dark:text-amber-400">{{ format(o.actual) }}</span>
           </div>
         </div>
       </div>

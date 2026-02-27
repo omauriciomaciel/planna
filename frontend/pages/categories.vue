@@ -110,7 +110,7 @@ onMounted(loadCategories)
 <template>
   <div>
     <div class="mb-8">
-      <h1 class="text-xl font-semibold text-white/90 tracking-tight">Categorias</h1>
+      <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">Categorias</h1>
       <p class="text-sm text-gray-500 mt-1">Organize suas transações por categoria</p>
     </div>
 
@@ -125,7 +125,7 @@ onMounted(loadCategories)
       </div>
 
       <!-- Add form -->
-      <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 mb-3">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-4 mb-3">
         <label class="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1.5">Nova categoria</label>
         <form class="space-y-2" @submit.prevent="addCategory">
           <div class="flex gap-2">
@@ -165,21 +165,21 @@ onMounted(loadCategories)
       </div>
 
       <!-- List -->
-      <div class="rounded-xl border border-white/8 overflow-hidden">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
 
         <!-- Loading skeleton -->
-        <div v-if="loading" class="divide-y divide-white/5">
+        <div v-if="loading" class="divide-y divide-black/5 dark:divide-white/5">
           <div v-for="i in 4" :key="i" class="flex items-center gap-3 px-4 py-3">
-            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
-            <div class="h-3 w-32 bg-white/5 rounded animate-pulse flex-1" />
-            <div class="h-4 w-14 bg-white/5 rounded-full animate-pulse" />
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 animate-pulse shrink-0" />
+            <div class="h-3 w-32 bg-black/5 dark:bg-white/5 rounded animate-pulse flex-1" />
+            <div class="h-4 w-14 bg-black/5 dark:bg-white/5 rounded-full animate-pulse" />
           </div>
         </div>
 
         <!-- Empty state -->
         <template v-else-if="categories.length === 0">
           <div class="flex flex-col items-center justify-center py-10 px-6 text-center">
-            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+            <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
               <UIcon name="i-heroicons-tag" class="text-gray-600 text-lg" />
             </div>
             <p class="text-sm text-gray-500">Nenhuma categoria cadastrada</p>
@@ -192,12 +192,12 @@ onMounted(loadCategories)
           <div
             v-for="cat in categories"
             :key="cat.id"
-            class="group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+            class="group flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
           >
-            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-base leading-none">
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0 text-base leading-none">
               {{ cat.emoji || '🏷️' }}
             </div>
-            <span class="flex-1 text-sm font-medium text-white/80">{{ cat.name }}</span>
+            <span class="flex-1 text-sm font-medium text-gray-700 dark:text-white/80">{{ cat.name }}</span>
 
             <!-- Badges -->
             <div class="flex items-center gap-1.5 shrink-0">
@@ -205,14 +205,14 @@ onMounted(loadCategories)
                 v-if="categoryTypeLabel(cat.category_type)"
                 class="text-xs px-1.5 py-0.5 rounded-full font-medium"
                 :class="cat.category_type === 'income'
-                  ? 'bg-emerald-500/10 text-emerald-400'
-                  : 'bg-red-500/10 text-red-400'"
+                  ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'"
               >
                 {{ categoryTypeLabel(cat.category_type) }}
               </span>
               <span
                 v-if="classificationLabel(cat.classification)"
-                class="text-xs px-1.5 py-0.5 rounded-full bg-white/5 text-gray-400 font-medium"
+                class="text-xs px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-gray-400 font-medium"
               >
                 {{ classificationLabel(cat.classification) }}
               </span>

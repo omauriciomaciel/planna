@@ -212,13 +212,13 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-xl font-semibold text-white/90 tracking-tight">Crédito</h1>
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">Crédito</h1>
         <p class="text-sm text-gray-500 mt-1">
           <template v-if="loading">Carregando...</template>
           <template v-else>
             {{ purchases.length }} compra{{ purchases.length !== 1 ? 's' : '' }}
             <template v-if="purchases.length > 0">
-              · <span class="text-violet-400 tabular-nums">{{ format(totalMonthly) }}/mês</span>
+              · <span class="text-violet-600 dark:text-violet-400 tabular-nums">{{ format(totalMonthly) }}/mês</span>
             </template>
           </template>
         </p>
@@ -229,7 +229,7 @@ onMounted(() => {
     </div>
 
     <!-- Form -->
-    <div v-if="showForm" class="rounded-xl border border-white/8 bg-white/[0.03] p-5 mb-4">
+    <div v-if="showForm" class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-5 mb-4">
       <label class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4 block">
         {{ editingId ? 'Editar compra' : 'Nova compra no crédito' }}
       </label>
@@ -321,10 +321,10 @@ onMounted(() => {
     </div>
 
     <!-- List -->
-    <div class="rounded-xl border border-white/8 overflow-hidden">
+    <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
 
       <!-- Column header -->
-      <div class="flex items-center gap-4 px-4 py-2 border-b border-white/5 bg-white/[0.015]">
+      <div class="flex items-center gap-4 px-4 py-2 border-b border-black/5 dark:border-white/5 bg-black/[0.015] dark:bg-white/[0.015]">
         <span class="text-xs font-medium text-gray-600 w-14 shrink-0">Data</span>
         <span class="text-xs font-medium text-gray-600 flex-1">Estabelecimento</span>
         <span class="text-xs font-medium text-gray-600 w-28 shrink-0 hidden lg:block">Cartão</span>
@@ -339,14 +339,14 @@ onMounted(() => {
         <div
           v-for="i in 6"
           :key="i"
-          class="flex items-center gap-4 px-4 py-3.5 border-b border-white/5 last:border-0"
+          class="flex items-center gap-4 px-4 py-3.5 border-b border-black/5 dark:border-white/5 last:border-0"
         >
-          <div class="h-2.5 w-10 bg-white/5 rounded animate-pulse shrink-0" />
-          <div class="h-3 bg-white/5 rounded animate-pulse flex-1" />
-          <div class="h-2.5 w-24 bg-white/5 rounded animate-pulse shrink-0 hidden lg:block" />
-          <div class="h-2.5 w-24 bg-white/5 rounded animate-pulse shrink-0 hidden lg:block" />
-          <div class="h-2.5 w-24 bg-white/5 rounded animate-pulse shrink-0 hidden sm:block" />
-          <div class="h-3 w-20 bg-white/5 rounded animate-pulse shrink-0" />
+          <div class="h-2.5 w-10 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0" />
+          <div class="h-3 bg-black/5 dark:bg-white/5 rounded animate-pulse flex-1" />
+          <div class="h-2.5 w-24 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0 hidden lg:block" />
+          <div class="h-2.5 w-24 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0 hidden lg:block" />
+          <div class="h-2.5 w-24 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0 hidden sm:block" />
+          <div class="h-3 w-20 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0" />
           <div class="w-16 shrink-0" />
         </div>
       </div>
@@ -354,7 +354,7 @@ onMounted(() => {
       <!-- Empty state -->
       <template v-else-if="purchases.length === 0">
         <div class="flex flex-col items-center justify-center py-16 px-6 text-center">
-          <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+          <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
             <UIcon name="i-heroicons-credit-card" class="text-gray-600 text-lg" />
           </div>
           <p class="text-sm text-gray-500">Nenhuma compra no crédito</p>
@@ -370,8 +370,8 @@ onMounted(() => {
         <div
           v-for="p in purchases"
           :key="p.id"
-          class="group flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-0 transition-colors"
-          :class="editingId === p.id ? 'bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
+          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors"
+          :class="editingId === p.id ? 'bg-black/[0.05] dark:bg-white/[0.05]' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'"
         >
           <!-- Date -->
           <span class="text-xs text-gray-500 tabular-nums w-14 shrink-0">
@@ -379,7 +379,7 @@ onMounted(() => {
           </span>
 
           <!-- Merchant -->
-          <span class="flex-1 text-sm text-white/80 truncate min-w-0">
+          <span class="flex-1 text-sm text-gray-700 dark:text-white/80 truncate min-w-0">
             {{ p.merchant }}
           </span>
 
@@ -387,7 +387,7 @@ onMounted(() => {
           <div class="w-28 shrink-0 hidden lg:block overflow-hidden">
             <span
               v-if="p.credit_card_name"
-              class="text-xs text-violet-400/80 bg-violet-500/10 px-1.5 py-0.5 rounded truncate block max-w-full"
+              class="text-xs text-violet-600 dark:text-violet-400/80 bg-violet-50 dark:bg-violet-500/10 px-1.5 py-0.5 rounded truncate block max-w-full"
             >{{ p.credit_card_name }}</span>
           </div>
 
@@ -395,7 +395,7 @@ onMounted(() => {
           <div class="w-28 shrink-0 hidden lg:block overflow-hidden">
             <span
               v-if="p.category_name"
-              class="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded truncate block max-w-full"
+              class="text-xs text-gray-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded truncate block max-w-full"
             >{{ p.category_name }}</span>
           </div>
 
@@ -406,7 +406,7 @@ onMounted(() => {
                 v-for="(filled, i) in installmentDots(p.current_installment, p.total_installments)"
                 :key="i"
                 class="w-1 h-1 rounded-full"
-                :class="filled ? 'bg-violet-400' : 'bg-white/15'"
+                :class="filled ? 'bg-violet-500 dark:bg-violet-400' : 'bg-black/15 dark:bg-white/15'"
               />
             </div>
             <span class="text-xs text-gray-600 tabular-nums">
@@ -415,7 +415,7 @@ onMounted(() => {
           </div>
 
           <!-- Installment amount -->
-          <span class="text-sm font-medium tabular-nums text-white/80 w-24 text-right shrink-0">
+          <span class="text-sm font-medium tabular-nums text-gray-700 dark:text-white/80 w-24 text-right shrink-0">
             {{ format(p.installment_amount) }}
           </span>
 

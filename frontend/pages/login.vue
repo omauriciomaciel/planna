@@ -24,10 +24,10 @@ async function handleLogin() {
 <template>
   <div>
     <div class="mb-8">
-      <h2 class="text-2xl font-semibold text-white/90 tracking-tight">
+      <h2 class="text-2xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">
         Bem-vindo de volta
       </h2>
-      <p class="text-white/40 text-sm mt-1.5">
+      <p class="text-gray-400 dark:text-white/40 text-sm mt-1.5">
         Entre na sua conta para continuar
       </p>
     </div>
@@ -64,7 +64,7 @@ async function handleLogin() {
       </div>
     </form>
 
-    <p class="text-center text-sm text-white/30 mt-7">
+    <p class="text-center text-sm text-gray-400 dark:text-white/30 mt-7">
       Não tem conta?
       <NuxtLink to="/register" class="text-primary-400 hover:text-primary-300 transition-colors">
         Cadastre-se

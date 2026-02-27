@@ -164,7 +164,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-950 lg:grid lg:grid-cols-2">
+  <div class="min-h-screen bg-white dark:bg-gray-950 lg:grid lg:grid-cols-2">
     <!-- Brand panel — desktop only -->
     <div
       class="hidden lg:flex flex-col justify-between p-14 relative overflow-hidden border-r border-white/5"
@@ -238,7 +238,7 @@ onUnmounted(() => {
           >
             <span class="text-emerald-400 font-bold text-xs leading-none">P</span>
           </div>
-          <span class="text-white/80 font-semibold text-base tracking-tight">Planna</span>
+          <span class="text-gray-800 dark:text-white/80 font-semibold text-base tracking-tight">Planna</span>
         </div>
 
         <slot />

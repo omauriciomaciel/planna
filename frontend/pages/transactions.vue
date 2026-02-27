@@ -176,7 +176,7 @@ onMounted(() => {
     <!-- Page header -->
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-xl font-semibold text-white/90 tracking-tight">Lançamentos</h1>
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">Lançamentos</h1>
         <p class="text-sm text-gray-500 mt-1">
           {{ loading ? 'Carregando...' : `${transactions.length} lançamentos` }}
         </p>
@@ -187,19 +187,19 @@ onMounted(() => {
     </div>
 
     <!-- Add form -->
-    <div v-if="showForm" class="rounded-xl border border-white/8 bg-white/[0.03] p-5 mb-4">
+    <div v-if="showForm" class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-5 mb-4">
       <div class="flex items-center justify-between mb-4">
         <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">
           {{ editingId ? 'Editar lançamento' : 'Novo lançamento' }}
         </label>
         <!-- Type toggle -->
-        <div class="flex rounded-lg overflow-hidden border border-white/8 text-sm">
+        <div class="flex rounded-lg overflow-hidden border border-black/8 dark:border-white/8 text-sm">
           <button
             type="button"
             :class="formType === 'expense'
-              ? 'bg-red-500/15 text-red-400'
+              ? 'bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400'
               : 'text-gray-500 hover:text-gray-300'"
-            class="px-4 py-1.5 font-medium transition-colors border-r border-white/8"
+            class="px-4 py-1.5 font-medium transition-colors border-r border-black/8 dark:border-white/8"
             @click="formType = 'expense'"
           >
             Saída
@@ -207,7 +207,7 @@ onMounted(() => {
           <button
             type="button"
             :class="formType === 'income'
-              ? 'bg-emerald-500/15 text-emerald-400'
+              ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
               : 'text-gray-500 hover:text-gray-300'"
             class="px-4 py-1.5 font-medium transition-colors"
             @click="formType = 'income'"
@@ -269,10 +269,10 @@ onMounted(() => {
     </div>
 
     <!-- Transaction list -->
-    <div class="rounded-xl border border-white/8 overflow-hidden">
+    <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
 
       <!-- Column header -->
-      <div class="flex items-center gap-4 px-4 py-2 border-b border-white/5 bg-white/[0.015]">
+      <div class="flex items-center gap-4 px-4 py-2 border-b border-black/5 dark:border-white/5 bg-black/[0.015] dark:bg-white/[0.015]">
         <span class="text-xs font-medium text-gray-600 w-14 shrink-0">Data</span>
         <span class="text-xs font-medium text-gray-600 flex-1">Descrição</span>
         <span class="text-xs font-medium text-gray-600 w-24 shrink-0 hidden md:block">Conta</span>
@@ -287,14 +287,14 @@ onMounted(() => {
         <div
           v-for="i in 8"
           :key="i"
-          class="flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-0"
+          class="flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0"
         >
-          <div class="h-2.5 w-10 bg-white/5 rounded animate-pulse shrink-0" />
-          <div class="h-3 bg-white/5 rounded animate-pulse flex-1" />
-          <div class="h-2.5 w-20 bg-white/5 rounded animate-pulse shrink-0 hidden md:block" />
-          <div class="h-2.5 w-20 bg-white/5 rounded animate-pulse shrink-0 hidden md:block" />
-          <div class="h-3 w-20 bg-white/5 rounded animate-pulse shrink-0" />
-          <div class="h-5 w-14 bg-white/5 rounded-full animate-pulse shrink-0 hidden sm:block" />
+          <div class="h-2.5 w-10 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0" />
+          <div class="h-3 bg-black/5 dark:bg-white/5 rounded animate-pulse flex-1" />
+          <div class="h-2.5 w-20 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0 hidden md:block" />
+          <div class="h-2.5 w-20 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0 hidden md:block" />
+          <div class="h-3 w-20 bg-black/5 dark:bg-white/5 rounded animate-pulse shrink-0" />
+          <div class="h-5 w-14 bg-black/5 dark:bg-white/5 rounded-full animate-pulse shrink-0 hidden sm:block" />
           <div class="w-16 shrink-0" />
         </div>
       </div>
@@ -302,7 +302,7 @@ onMounted(() => {
       <!-- Empty state -->
       <template v-else-if="transactions.length === 0">
         <div class="flex flex-col items-center justify-center py-16 px-6 text-center">
-          <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+          <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
             <UIcon name="i-heroicons-banknotes" class="text-gray-600 text-lg" />
           </div>
           <p class="text-sm text-gray-500">Nenhum lançamento encontrado</p>
@@ -318,8 +318,8 @@ onMounted(() => {
         <div
           v-for="tx in transactions"
           :key="tx.id"
-          class="group flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-0 transition-colors"
-          :class="editingId === tx.id ? 'bg-white/[0.05]' : 'hover:bg-white/[0.02]'"
+          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors"
+          :class="editingId === tx.id ? 'bg-black/[0.05] dark:bg-white/[0.05]' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'"
         >
           <!-- Date -->
           <span class="text-xs text-gray-500 tabular-nums w-14 shrink-0">
@@ -327,27 +327,27 @@ onMounted(() => {
           </span>
 
           <!-- Description -->
-          <span class="flex-1 text-sm text-white/80 truncate min-w-0">
+          <span class="flex-1 text-sm text-gray-700 dark:text-white/80 truncate min-w-0">
             {{ tx.description }}
           </span>
 
           <!-- Account -->
           <span
             v-if="tx.account_name"
-            class="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[96px] shrink-0 hidden md:block"
+            class="text-xs text-gray-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[96px] shrink-0 hidden md:block"
           >{{ tx.account_name }}</span>
           <span v-else class="w-24 shrink-0 hidden md:block" />
 
           <!-- Category -->
           <span
             v-if="tx.category_name"
-            class="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[112px] shrink-0 hidden md:block"
+            class="text-xs text-gray-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[112px] shrink-0 hidden md:block"
           >{{ tx.category_name }}</span>
           <span v-else class="w-28 shrink-0 hidden md:block" />
 
           <!-- Amount -->
           <span
-            :class="tx.type === 'income' ? 'text-emerald-400' : 'text-red-400'"
+            :class="tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
             class="text-sm font-medium tabular-nums w-24 text-right shrink-0"
           >
             {{ tx.type === 'expense' ? '−' : '+' }}{{ format(tx.amount) }}

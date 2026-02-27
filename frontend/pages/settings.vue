@@ -40,22 +40,22 @@ onMounted(loadSettings)
 <template>
   <div>
     <div class="mb-8">
-      <h1 class="text-xl font-semibold text-white/90 tracking-tight">Configurações</h1>
+      <h1 class="text-xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">Configurações</h1>
       <p class="text-sm text-gray-500 mt-1">Preferências de comportamento e notificações</p>
     </div>
 
     <!-- Loading skeleton -->
     <div v-if="!settings" class="max-w-2xl mx-auto space-y-6">
-      <div class="rounded-xl border border-white/8 overflow-hidden">
-        <div v-for="i in 3" :key="i" class="flex items-center justify-between px-4 py-4 border-b border-white/5 last:border-0">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
+        <div v-for="i in 3" :key="i" class="flex items-center justify-between px-4 py-4 border-b border-black/5 dark:border-white/5 last:border-0">
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 animate-pulse shrink-0" />
             <div class="space-y-1.5">
-              <div class="h-3 w-40 bg-white/5 rounded animate-pulse" />
-              <div class="h-2.5 w-56 bg-white/5 rounded animate-pulse" />
+              <div class="h-3 w-40 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-56 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
             </div>
           </div>
-          <div class="w-10 h-5 bg-white/5 rounded-full animate-pulse shrink-0" />
+          <div class="w-10 h-5 bg-black/5 dark:bg-white/5 rounded-full animate-pulse shrink-0" />
         </div>
       </div>
     </div>
@@ -65,17 +65,17 @@ onMounted(loadSettings)
       <!-- Categorização -->
       <div>
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Categorização</h2>
-        <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-4">
             <div class="flex items-center gap-3">
               <div
                 class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                 style="background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.15)"
               >
-                <UIcon name="i-heroicons-sparkles" class="text-emerald-400 text-sm" />
+                <UIcon name="i-heroicons-sparkles" class="text-emerald-600 dark:text-emerald-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Categorização automática</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Categorização automática</p>
                 <p class="text-xs text-gray-500 mt-0.5">Sugere categorias via KMeans baseado no seu histórico de gastos</p>
               </div>
             </div>
@@ -87,16 +87,16 @@ onMounted(loadSettings)
       <!-- Notificações por Email -->
       <div>
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Notificações por Email</h2>
-        <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
 
           <!-- Despesas a vencer -->
-          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+          <div class="flex items-center justify-between px-4 py-4 border-b border-black/5 dark:border-white/5">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
                 <UIcon name="i-heroicons-clock" class="text-gray-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Despesas a vencer</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Despesas a vencer</p>
                 <p class="text-xs text-gray-500 mt-0.5">Avisa com antecedência antes do vencimento</p>
               </div>
             </div>
@@ -116,13 +116,13 @@ onMounted(loadSettings)
           </div>
 
           <!-- Despesas vencidas -->
-          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+          <div class="flex items-center justify-between px-4 py-4 border-b border-black/5 dark:border-white/5">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
                 <UIcon name="i-heroicons-exclamation-circle" class="text-gray-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Despesas vencidas</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Despesas vencidas</p>
                 <p class="text-xs text-gray-500 mt-0.5">Lembrete de lançamentos que passaram da data de vencimento</p>
               </div>
             </div>
@@ -130,13 +130,13 @@ onMounted(loadSettings)
           </div>
 
           <!-- Despesas acima do normal -->
-          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+          <div class="flex items-center justify-between px-4 py-4 border-b border-black/5 dark:border-white/5">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
                 <UIcon name="i-heroicons-arrow-trending-up" class="text-gray-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Despesas acima do normal</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Despesas acima do normal</p>
                 <p class="text-xs text-gray-500 mt-0.5">Detecta gastos fora do padrão pelo método IQR</p>
               </div>
             </div>
@@ -146,11 +146,11 @@ onMounted(loadSettings)
           <!-- Fechamento mensal -->
           <div class="flex items-center justify-between px-4 py-4">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
                 <UIcon name="i-heroicons-calendar-days" class="text-gray-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Fechamento mensal</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Fechamento mensal</p>
                 <p class="text-xs text-gray-500 mt-0.5">Resumo automático de receitas e despesas ao fim de cada mês</p>
               </div>
             </div>
@@ -163,14 +163,14 @@ onMounted(loadSettings)
       <!-- Visualização -->
       <div>
         <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Visualização</h2>
-        <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
           <div class="flex items-center justify-between px-4 py-4">
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
                 <UIcon name="i-heroicons-eye-slash" class="text-gray-400 text-sm" />
               </div>
               <div>
-                <p class="text-sm font-medium text-white/80">Ignorar pagamento de fatura</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-white/80">Ignorar pagamento de fatura</p>
                 <p class="text-xs text-gray-500 mt-0.5">Oculta transferências de fatura no gráfico Sankey</p>
               </div>
             </div>

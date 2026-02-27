@@ -175,7 +175,7 @@ onMounted(loadData)
 <template>
   <div>
     <div class="mb-8">
-      <h1 class="text-xl font-semibold text-white tracking-tight">Contas e Cartões</h1>
+      <h1 class="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">Contas e Cartões</h1>
       <p class="text-sm text-gray-500 mt-1">Gerencie suas contas bancárias e cartões de crédito</p>
     </div>
 
@@ -194,7 +194,7 @@ onMounted(loadData)
       <!-- ── Row 2: Forms (mesmo grid row = mesma altura) ── -->
 
       <!-- Add account form -->
-      <form class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-4" @submit.prevent="addAccount">
+      <form class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-4 flex flex-col gap-4" @submit.prevent="addAccount">
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Banco</label>
           <div class="flex gap-2">
@@ -230,7 +230,7 @@ onMounted(loadData)
       </form>
 
       <!-- Add card form -->
-      <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-4">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-4 flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Nome do cartão</label>
           <div class="flex gap-2">
@@ -278,19 +278,19 @@ onMounted(loadData)
       <!-- ── Row 3: Lists (mesmo grid row = topo alinhado) ── -->
 
       <!-- Accounts list -->
-      <div class="rounded-xl border border-white/8 overflow-hidden">
-        <div v-if="loading" class="divide-y divide-white/5">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
+        <div v-if="loading" class="divide-y divide-black/5 dark:divide-white/5">
           <div v-for="i in 2" :key="i" class="flex items-center gap-3 px-4 py-3">
-            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 animate-pulse shrink-0" />
             <div class="flex flex-col gap-1.5 flex-1">
-              <div class="h-3 w-40 bg-white/5 rounded animate-pulse" />
-              <div class="h-2.5 w-16 bg-white/5 rounded animate-pulse" />
+              <div class="h-3 w-40 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-16 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
             </div>
           </div>
         </div>
         <template v-else-if="accounts.length === 0">
           <div class="flex flex-col items-center justify-center py-10 px-6 text-center">
-            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+            <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
               <UIcon name="i-heroicons-building-library" class="text-gray-600 text-lg" />
             </div>
             <p class="text-sm text-gray-500">Nenhuma conta cadastrada</p>
@@ -301,13 +301,13 @@ onMounted(loadData)
           <div
             v-for="account in accounts"
             :key="account.id"
-            class="group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+            class="group flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
           >
-            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
               <UIcon name="i-heroicons-building-library" class="text-gray-400 text-sm" />
             </div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-white truncate">{{ account.name }}</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ account.name }}</p>
               <p v-if="account.bank?.code" class="text-xs text-gray-500">
                 Código {{ account.bank.code }} · ISPB {{ account.bank_ispb }}
               </p>
@@ -315,7 +315,7 @@ onMounted(loadData)
             <div class="text-right shrink-0 mr-1">
               <p
                 class="text-sm font-medium tabular-nums"
-                :class="account.current_balance >= 0 ? 'text-emerald-400' : 'text-red-400'"
+                :class="account.current_balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
               >
                 {{ formatCurrency(account.current_balance) }}
               </p>
@@ -336,19 +336,19 @@ onMounted(loadData)
       </div>
 
       <!-- Cards list -->
-      <div class="rounded-xl border border-white/8 overflow-hidden">
-        <div v-if="loading" class="divide-y divide-white/5">
+      <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
+        <div v-if="loading" class="divide-y divide-black/5 dark:divide-white/5">
           <div v-for="i in 2" :key="i" class="flex items-center gap-3 px-4 py-3">
-            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 animate-pulse shrink-0" />
             <div class="flex flex-col gap-1.5 flex-1">
-              <div class="h-3 w-32 bg-white/5 rounded animate-pulse" />
-              <div class="h-2.5 w-48 bg-white/5 rounded animate-pulse" />
+              <div class="h-3 w-32 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-48 bg-black/5 dark:bg-white/5 rounded animate-pulse" />
             </div>
           </div>
         </div>
         <template v-else-if="cards.length === 0">
           <div class="flex flex-col items-center justify-center py-10 px-6 text-center">
-            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+            <div class="w-10 h-10 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center mb-3">
               <UIcon name="i-heroicons-credit-card" class="text-gray-600 text-lg" />
             </div>
             <p class="text-sm text-gray-500">Nenhum cartão cadastrado</p>
@@ -359,17 +359,17 @@ onMounted(loadData)
           <div
             v-for="card in cards"
             :key="card.id"
-            class="group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+            class="group flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
           >
-            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+            <div class="w-8 h-8 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
               <UIcon name="i-heroicons-credit-card" class="text-gray-400 text-sm" />
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <p class="text-sm font-medium text-white">{{ card.name }}</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ card.name }}</p>
                 <span
                   v-if="accountNameForCard(card)"
-                  class="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                  class="text-xs text-gray-500 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[120px]"
                 >{{ accountNameForCard(card) }}</span>
               </div>
               <div class="flex items-center gap-3 mt-0.5">

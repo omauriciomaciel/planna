@@ -25,10 +25,10 @@ async function handleRegister() {
 <template>
   <div>
     <div class="mb-8">
-      <h2 class="text-2xl font-semibold text-white/90 tracking-tight">
+      <h2 class="text-2xl font-semibold text-gray-900 dark:text-white/90 tracking-tight">
         Criar conta
       </h2>
-      <p class="text-white/40 text-sm mt-1.5">
+      <p class="text-gray-400 dark:text-white/40 text-sm mt-1.5">
         Comece a organizar suas finanças
       </p>
     </div>
@@ -75,7 +75,7 @@ async function handleRegister() {
       </div>
     </form>
 
-    <p class="text-center text-sm text-white/30 mt-7">
+    <p class="text-center text-sm text-gray-400 dark:text-white/30 mt-7">
       Já tem conta?
       <NuxtLink to="/login" class="text-primary-400 hover:text-primary-300 transition-colors">
         Entrar
