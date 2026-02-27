@@ -44,9 +44,9 @@ async function loadData() {
   accounts.value = accs
   cards.value = cds
   bankOptions.value = banks.map(b => ({
-    label: b.code ? `${b.code} – ${b.name}` : b.name,
+    label: b.code ? `${b.code} – ${b.full_name}` : b.full_name,
     value: b.ispb,
-    bankName: b.name,
+    bankName: b.full_name,
     bankIspb: b.ispb,
   }))
 }
