@@ -43,7 +43,7 @@ function toggleTheme() {
             <UButton
               variant="ghost"
               color="neutral"
-              :icon="colorMode.value === 'dark' ? 'i-heroicons-sun' : 'i-heroicons-moon'"
+              :icon="colorMode.value === 'dark' ? 'i-heroicons-moon' : 'i-heroicons-sun'"
               @click="toggleTheme"
             />
             <UButton

@@ -1,7 +1,8 @@
 import enum
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import Enum, ForeignKey, Integer, String
+from sqlalchemy import Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,5 +34,6 @@ class Category(Base, UUIDMixin, TimestampMixin):
     classification: Mapped[CategoryClassification | None] = mapped_column(
         Enum(CategoryClassification, name="categoryclassification"), nullable=True
     )
+    budget: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     user = relationship("User", back_populates="categories")

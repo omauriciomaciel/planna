@@ -30,6 +30,7 @@ async def create_category(
         emoji=data.emoji,
         category_type=data.category_type,
         classification=data.classification,
+        budget=data.budget,
     )
 
 

@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ def to_category_response(c: Category) -> CategoryResponse:
         sort_order=c.sort_order,
         category_type=c.category_type,
         classification=c.classification,
+        budget=c.budget,
     )
 
 
@@ -35,6 +37,7 @@ class CategoryService:
         emoji: str | None = None,
         category_type: str | None = None,
         classification: str | None = None,
+        budget: Decimal | None = None,
     ) -> CategoryResponse:
         cat = Category(
             user_id=user_id,
@@ -42,6 +45,7 @@ class CategoryService:
             emoji=emoji,
             category_type=category_type,
             classification=classification,
+            budget=budget,
         )
         await self.repo.create(cat)
         return to_category_response(cat)

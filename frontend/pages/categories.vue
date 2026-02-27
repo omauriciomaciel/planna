@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const api = useApi()
+const { format } = useCurrency()
 
 interface Category {
   id: string
@@ -10,6 +11,7 @@ interface Category {
   sort_order: number
   category_type: string | null
   classification: string | null
+  budget: number | null
 }
 
 interface LookupOption {
@@ -23,6 +25,8 @@ const newName = ref('')
 const newEmoji = ref('')
 const newCategoryType = ref<LookupOption | undefined>()
 const newClassification = ref<LookupOption | undefined>()
+const newBudgetDisplay = ref('')
+const newBudgetRaw = ref<number | null>(null)
 const saving = ref(false)
 
 const categoryTypeOptions: LookupOption[] = [
@@ -47,6 +51,15 @@ function classificationLabel(value: string | null) {
   return null
 }
 
+function handleBudgetInput(e: Event) {
+  const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '')
+  const cents = parseInt(digits || '0', 10)
+  newBudgetRaw.value = cents > 0 ? cents / 100 : null
+  newBudgetDisplay.value = cents > 0
+    ? (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : ''
+}
+
 async function loadCategories() {
   loading.value = true
   try {
@@ -65,11 +78,14 @@ async function addCategory() {
       emoji: newEmoji.value.trim() || null,
       category_type: newCategoryType.value?.value ?? null,
       classification: newClassification.value?.value ?? null,
+      budget: newBudgetRaw.value,
     })
     newName.value = ''
     newEmoji.value = ''
     newCategoryType.value = undefined
     newClassification.value = undefined
+    newBudgetDisplay.value = ''
+    newBudgetRaw.value = null
     await loadCategories()
   } finally {
     saving.value = false
@@ -153,6 +169,15 @@ onMounted(loadCategories)
               placeholder="Classificação..."
               class="flex-1"
             />
+          </div>
+          <div class="flex gap-2">
+            <UInput
+              :value="newBudgetDisplay"
+              placeholder="Orçamento (R$ 0,00)"
+              inputmode="numeric"
+              class="flex-1"
+              @input="handleBudgetInput"
+            />
             <UButton
               type="submit"
               icon="i-heroicons-plus"
@@ -215,6 +240,12 @@ onMounted(loadCategories)
                 class="text-xs px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-gray-400 font-medium"
               >
                 {{ classificationLabel(cat.classification) }}
+              </span>
+              <span
+                v-if="cat.budget"
+                class="text-xs text-gray-500 tabular-nums"
+              >
+                {{ format(cat.budget) }}
               </span>
             </div>
 

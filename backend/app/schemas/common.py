@@ -24,6 +24,7 @@ class CategoryCreate(BaseModel):
     emoji: str | None = None
     category_type: str | None = None  # "income" or "expense"
     classification: str | None = None  # "essential" or "non_essential"
+    budget: Decimal | None = None
 
 
 class CategoryUpdate(BaseModel):
@@ -32,6 +33,7 @@ class CategoryUpdate(BaseModel):
     sort_order: int | None = None
     category_type: str | None = None
     classification: str | None = None
+    budget: Decimal | None = None
 
 
 class CategoryResponse(BaseModel):
@@ -41,6 +43,7 @@ class CategoryResponse(BaseModel):
     sort_order: int
     category_type: str | None
     classification: str | None
+    budget: Decimal | None
 
     model_config = {"from_attributes": True}
 
