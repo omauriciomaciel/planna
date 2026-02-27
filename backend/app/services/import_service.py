@@ -5,10 +5,13 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.credit_purchase import CreditPurchase
-from app.models.transaction import Transaction, TransactionStatus, TransactionType
+from app.database import get_db
+from app.models.transaction import TransactionStatus, TransactionType
+from app.repositories.credit_purchase import CreditPurchaseRepository
+from app.repositories.transaction import TransactionRepository
 
 
 def parse_ofx(content: str) -> list[dict]:
@@ -66,7 +69,6 @@ def parse_nubank_csv(content: str) -> list[dict]:
         except ValueError:
             continue
 
-        # Extract installment info from title
         installment_match = re.search(r"Parcela\s+(\d+)/(\d+)", title, re.IGNORECASE)
         current = 1
         total = 1
@@ -130,51 +132,48 @@ def parse_nubank_ofx(content: str) -> list[dict]:
     return purchases
 
 
-async def save_transactions(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    parsed: list[dict],
-    account_id: uuid.UUID | None = None,
-) -> int:
-    """Save parsed OFX transactions to database. Returns count of saved rows."""
-    count = 0
-    for item in parsed:
-        tx = Transaction(
-            user_id=user_id,
-            date=item["date"],
-            due_date=item.get("due_date"),
-            description=item["description"],
-            account_id=account_id,
-            type=item["type"],
-            amount=item["amount"],
-            status=item["status"],
+class ImportService:
+    def __init__(
+        self,
+        transaction_repo: TransactionRepository,
+        credit_purchase_repo: CreditPurchaseRepository,
+    ):
+        self.transaction_repo = transaction_repo
+        self.credit_purchase_repo = credit_purchase_repo
+
+    async def save_transactions(
+        self,
+        user_id: uuid.UUID,
+        parsed: list[dict],
+        account_id: uuid.UUID | None = None,
+    ) -> int:
+        return await self.transaction_repo.bulk_create(user_id, parsed, account_id)
+
+    async def save_credit_purchases(
+        self,
+        user_id: uuid.UUID,
+        parsed: list[dict],
+        credit_card_id: uuid.UUID | None = None,
+    ) -> int:
+        return await self.credit_purchase_repo.bulk_create(
+            user_id, parsed, credit_card_id
         )
-        db.add(tx)
-        count += 1
-    await db.commit()
-    return count
 
 
-async def save_credit_purchases(
-    db: AsyncSession,
-    user_id: uuid.UUID,
-    parsed: list[dict],
-    credit_card_id: uuid.UUID | None = None,
-) -> int:
-    """Save parsed credit card purchases to database. Returns count of saved rows."""
-    count = 0
-    for item in parsed:
-        purchase = CreditPurchase(
-            user_id=user_id,
-            purchase_date=item["purchase_date"],
-            credit_card_id=credit_card_id,
-            merchant=item["merchant"],
-            total_amount=item["total_amount"],
-            installment_amount=item["installment_amount"],
-            current_installment=item["current_installment"],
-            total_installments=item["total_installments"],
-        )
-        db.add(purchase)
-        count += 1
-    await db.commit()
-    return count
+def get_transaction_repository(
+    db: AsyncSession = Depends(get_db),
+) -> TransactionRepository:
+    return TransactionRepository(db)
+
+
+def get_credit_purchase_repository(
+    db: AsyncSession = Depends(get_db),
+) -> CreditPurchaseRepository:
+    return CreditPurchaseRepository(db)
+
+
+def get_import_service(
+    transaction_repo: TransactionRepository = Depends(get_transaction_repository),
+    credit_purchase_repo: CreditPurchaseRepository = Depends(get_credit_purchase_repository),
+) -> ImportService:
+    return ImportService(transaction_repo, credit_purchase_repo)

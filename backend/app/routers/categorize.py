@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
 from app.deps import get_current_user
-from app.ml.categorizer import predict_category, train_and_save
 from app.models.user import User
+from app.services.categorizer import CategorizerService, get_categorizer_service
 
 router = APIRouter(prefix="/categorize", tags=["categorize"])
 
@@ -22,18 +20,18 @@ class CategorizeResponse(BaseModel):
 async def categorize(
     data: CategorizeRequest,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: CategorizerService = Depends(get_categorizer_service),
 ):
-    category = await predict_category(db, user.id, data.description)
+    category = await service.predict_category(user.id, data.description)
     return CategorizeResponse(category=category)
 
 
 @router.post("/train")
 async def train(
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: CategorizerService = Depends(get_categorizer_service),
 ):
-    success = await train_and_save(db, user.id)
+    success = await service.train_and_save(user.id)
     if not success:
         raise HTTPException(
             status_code=400,

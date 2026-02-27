@@ -1,14 +1,17 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from fastapi import Depends
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import get_db
 from app.models.user import User
 from app.models.user_settings import UserSettings
+from app.repositories.user import UserRepository
+from app.repositories.user_settings import UserSettingsRepository
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -48,31 +51,52 @@ def decode_token(token: str) -> dict | None:
         return None
 
 
-async def register_user(db: AsyncSession, email: str, name: str, password: str) -> User:
-    user = User(
-        email=email,
-        name=name,
-        password_hash=hash_password(password),
-    )
-    db.add(user)
-    await db.flush()
+class AuthService:
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        settings_repo: UserSettingsRepository,
+    ):
+        self.user_repo = user_repo
+        self.settings_repo = settings_repo
 
-    user_settings = UserSettings(user_id=user.id)
-    db.add(user_settings)
+    async def register_user(self, email: str, name: str, password: str) -> User:
+        user = User(email=email, name=name, password_hash=hash_password(password))
+        self.user_repo.db.add(user)
+        await self.user_repo.db.flush()
 
-    await db.commit()
-    await db.refresh(user)
-    return user
+        user_settings = UserSettings(user_id=user.id)
+        self.user_repo.db.add(user_settings)
 
-
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    if user and verify_password(password, user.password_hash):
+        await self.user_repo.db.commit()
+        await self.user_repo.db.refresh(user)
         return user
-    return None
+
+    async def authenticate_user(self, email: str, password: str) -> User | None:
+        user = await self.user_repo.get_by_email(email)
+        if user and verify_password(password, user.password_hash):
+            return user
+        return None
+
+    async def get_user_by_id(self, user_id: str) -> User | None:
+        return await self.user_repo.get_by_id(uuid.UUID(user_id))
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        return await self.user_repo.get_by_email(email)
 
 
-async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
-    return result.scalar_one_or_none()
+def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
+    return UserRepository(db)
+
+
+def get_user_settings_repository(
+    db: AsyncSession = Depends(get_db),
+) -> UserSettingsRepository:
+    return UserSettingsRepository(db)
+
+
+def get_auth_service(
+    user_repo: UserRepository = Depends(get_user_repository),
+    settings_repo: UserSettingsRepository = Depends(get_user_settings_repository),
+) -> AuthService:
+    return AuthService(user_repo, settings_repo)

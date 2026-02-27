@@ -1,17 +1,15 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User
 from app.services.import_service import (
+    ImportService,
+    get_import_service,
     parse_nubank_csv,
     parse_nubank_ofx,
     parse_ofx,
-    save_credit_purchases,
-    save_transactions,
 )
 
 router = APIRouter(prefix="/import", tags=["import"])
@@ -22,7 +20,7 @@ async def import_ofx(
     file: UploadFile,
     account_id: str | None = None,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: ImportService = Depends(get_import_service),
 ):
     content = (await file.read()).decode("latin-1")
     parsed = parse_ofx(content)
@@ -37,7 +35,7 @@ async def confirm_ofx(
     file: UploadFile,
     account_id: str | None = Form(None),
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: ImportService = Depends(get_import_service),
 ):
     content = (await file.read()).decode("latin-1")
     parsed = parse_ofx(content)
@@ -45,7 +43,7 @@ async def confirm_ofx(
         raise HTTPException(status_code=400, detail="No transactions found in OFX file")
 
     acc_id = uuid.UUID(account_id) if account_id else None
-    count = await save_transactions(db, user.id, parsed, acc_id)
+    count = await service.save_transactions(user.id, parsed, acc_id)
     return {"imported": count}
 
 
@@ -55,7 +53,7 @@ async def import_csv(
     credit_card_id: str | None = None,
     file_type: str = "csv",
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: ImportService = Depends(get_import_service),
 ):
     content = (await file.read()).decode("utf-8")
 
@@ -76,7 +74,7 @@ async def confirm_csv(
     credit_card_id: str | None = Form(None),
     file_type: str = Form("csv"),
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    service: ImportService = Depends(get_import_service),
 ):
     content = (await file.read()).decode("utf-8")
 
@@ -89,5 +87,5 @@ async def confirm_csv(
         raise HTTPException(status_code=400, detail="No purchases found in file")
 
     card_id = uuid.UUID(credit_card_id) if credit_card_id else None
-    count = await save_credit_purchases(db, user.id, parsed, card_id)
+    count = await service.save_credit_purchases(user.id, parsed, card_id)
     return {"imported": count}
