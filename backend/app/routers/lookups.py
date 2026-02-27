@@ -3,14 +3,19 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.account import Account
+from app.models.bank import Bank
 from app.models.category import Category
 from app.models.credit_card import CreditCard
 from app.models.user import User
 from app.schemas.common import (
+    AccountCreate,
+    AccountResponse,
+    BankResponse,
     CategoryCreate,
     CategoryResponse,
     CategoryUpdate,
@@ -21,29 +26,44 @@ from app.schemas.common import (
 router = APIRouter(tags=["lookups"])
 
 
+# --- Banks ---
+
+@router.get("/banks", response_model=list[BankResponse])
+async def list_banks(
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Bank).order_by(Bank.code.nullslast(), Bank.name))
+    return result.scalars().all()
+
+
 # --- Accounts ---
 
-@router.get("/accounts", response_model=list[NamedItemResponse])
+@router.get("/accounts", response_model=list[AccountResponse])
 async def list_accounts(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
-        select(Account).where(Account.user_id == user.id).order_by(Account.name)
+        select(Account)
+        .where(Account.user_id == user.id)
+        .options(selectinload(Account.bank))
+        .join(Bank, Account.bank_ispb == Bank.ispb, isouter=True)
+        .order_by(Bank.full_name)
     )
-    return [NamedItemResponse(id=str(a.id), name=a.name) for a in result.scalars().all()]
+    return result.scalars().all()
 
 
-@router.post("/accounts", response_model=NamedItemResponse, status_code=201)
+@router.post("/accounts", response_model=AccountResponse, status_code=201)
 async def create_account(
-    data: NamedItemCreate,
+    data: AccountCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    account = Account(user_id=user.id, name=data.name)
+    account = Account(user_id=user.id, bank_ispb=data.bank_ispb)
     db.add(account)
     await db.commit()
-    await db.refresh(account)
-    return NamedItemResponse(id=str(account.id), name=account.name)
+    await db.refresh(account, ["bank"])
+    return account
 
 
 @router.delete("/accounts/{account_id}", status_code=204)

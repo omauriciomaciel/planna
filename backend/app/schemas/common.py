@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel
 
 
@@ -32,6 +34,28 @@ class CategoryResponse(BaseModel):
     name: str
     emoji: str | None
     sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class BankResponse(BaseModel):
+    ispb: str
+    code: int | None
+    name: str
+    full_name: str
+
+    model_config = {"from_attributes": True}
+
+
+class AccountCreate(BaseModel):
+    bank_ispb: str
+
+
+class AccountResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    bank_ispb: str | None
+    bank: BankResponse | None
 
     model_config = {"from_attributes": True}
 

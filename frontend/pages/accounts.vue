@@ -3,29 +3,58 @@ definePageMeta({ middleware: 'auth' })
 
 const api = useApi()
 
+interface Bank {
+  ispb: string
+  code: number | null
+  name: string
+  full_name: string
+}
+
+interface Account {
+  id: string
+  name: string
+  bank_ispb: string | null
+  bank: Bank | null
+}
+
 interface NamedItem {
   id: string
   name: string
 }
 
-const accounts = ref<NamedItem[]>([])
+interface BankOption {
+  label: string
+  value: string
+  bankName: string
+  bankIspb: string
+}
+
+const accounts = ref<Account[]>([])
 const cards = ref<NamedItem[]>([])
-const newAccount = ref('')
+const bankOptions = ref<BankOption[]>([])
+const selectedBank = ref<BankOption | undefined>(undefined)
 const newCard = ref('')
 
 async function loadData() {
-  const [accs, cds] = await Promise.all([
-    api.get<NamedItem[]>('/accounts'),
+  const [accs, cds, banks] = await Promise.all([
+    api.get<Account[]>('/accounts'),
     api.get<NamedItem[]>('/credit-cards'),
+    api.get<Bank[]>('/banks'),
   ])
   accounts.value = accs
   cards.value = cds
+  bankOptions.value = banks.map(b => ({
+    label: b.code ? `${b.code} – ${b.name}` : b.name,
+    value: b.ispb,
+    bankName: b.name,
+    bankIspb: b.ispb,
+  }))
 }
 
 async function addAccount() {
-  if (!newAccount.value.trim()) return
-  await api.post('/accounts', { name: newAccount.value.trim() })
-  newAccount.value = ''
+  if (!selectedBank.value) return
+  await api.post('/accounts', { bank_ispb: selectedBank.value.bankIspb })
+  selectedBank.value = undefined
   await loadData()
 }
 
@@ -61,8 +90,17 @@ onMounted(loadData)
         </template>
 
         <form class="flex gap-3 mb-4" @submit.prevent="addAccount">
-          <UInput v-model="newAccount" placeholder="Nome da conta" class="flex-1" />
-          <UButton type="submit" icon="i-heroicons-plus">Adicionar</UButton>
+          <USelectMenu
+            v-model="selectedBank"
+            :items="bankOptions"
+            placeholder="Buscar banco..."
+            searchable
+            search-placeholder="Nome ou código..."
+            class="flex-1"
+          />
+          <UButton type="submit" icon="i-heroicons-plus" :disabled="!selectedBank">
+            Adicionar
+          </UButton>
         </form>
 
         <div class="divide-y divide-gray-800">
@@ -71,7 +109,12 @@ onMounted(loadData)
             :key="account.id"
             class="flex items-center justify-between py-3"
           >
-            <span class="text-white">{{ account.name }}</span>
+            <div class="flex flex-col">
+              <span class="text-white text-sm font-medium">{{ account.name }}</span>
+              <span v-if="account.bank?.code" class="text-gray-400 text-xs">
+                Código {{ account.bank.code }}
+              </span>
+            </div>
             <UButton
               variant="ghost"
               color="error"

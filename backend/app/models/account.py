@@ -13,7 +13,14 @@ class Account(Base, UUIDMixin, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    name: Mapped[str] = mapped_column(String(100))
+    bank_ispb: Mapped[str | None] = mapped_column(
+        String(8), ForeignKey("banks.ispb", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     user = relationship("User", back_populates="accounts")
+    bank = relationship("Bank", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
+
+    @property
+    def name(self) -> str:
+        return self.bank.full_name if self.bank else ""

@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user
+from app.models.account import Account
 from app.models.transaction import Transaction, TransactionStatus, TransactionType
 from app.models.user import User
 from app.schemas.transaction import (
@@ -46,7 +47,10 @@ async def list_transactions(
     query = (
         select(Transaction)
         .where(Transaction.user_id == user.id)
-        .options(selectinload(Transaction.account), selectinload(Transaction.category))
+        .options(
+                selectinload(Transaction.account).selectinload(Account.bank),
+                selectinload(Transaction.category),
+            )
         .order_by(Transaction.date.desc())
         .offset(skip)
         .limit(limit)
@@ -80,6 +84,8 @@ async def create_transaction(
     db.add(transaction)
     await db.commit()
     await db.refresh(transaction, attribute_names=["account", "category"])
+    if transaction.account:
+        await db.refresh(transaction.account, attribute_names=["bank"])
     return _to_response(transaction)
 
 
@@ -92,7 +98,10 @@ async def get_transaction(
     result = await db.execute(
         select(Transaction)
         .where(Transaction.id == uuid.UUID(transaction_id), Transaction.user_id == user.id)
-        .options(selectinload(Transaction.account), selectinload(Transaction.category))
+        .options(
+                selectinload(Transaction.account).selectinload(Account.bank),
+                selectinload(Transaction.category),
+            )
     )
     t = result.scalar_one_or_none()
     if not t:
@@ -110,7 +119,10 @@ async def update_transaction(
     result = await db.execute(
         select(Transaction)
         .where(Transaction.id == uuid.UUID(transaction_id), Transaction.user_id == user.id)
-        .options(selectinload(Transaction.account), selectinload(Transaction.category))
+        .options(
+                selectinload(Transaction.account).selectinload(Account.bank),
+                selectinload(Transaction.category),
+            )
     )
     t = result.scalar_one_or_none()
     if not t:
@@ -128,6 +140,8 @@ async def update_transaction(
 
     await db.commit()
     await db.refresh(t, attribute_names=["account", "category"])
+    if t.account:
+        await db.refresh(t.account, attribute_names=["bank"])
     return _to_response(t)
 
 
