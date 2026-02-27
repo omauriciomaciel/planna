@@ -454,7 +454,7 @@ watch(analytics, () => nextTick(renderCharts))
           </template>
         </p>
       </div>
-      <UButton icon="i-heroicons-plus" @click="editingId ? cancelForm() : (showForm = !showForm)">
+      <UButton icon="i-heroicons-plus" @click="cancelForm(); showForm = true">
         Nova compra
       </UButton>
     </div>
@@ -539,96 +539,6 @@ watch(analytics, () => nextTick(renderCharts))
       </div>
     </div>
 
-    <!-- Form -->
-    <div v-if="showForm" class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-5">
-      <label class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4 block">
-        {{ editingId ? 'Editar compra' : 'Nova compra no crédito' }}
-      </label>
-      <form class="space-y-3" @submit.prevent="savePurchase">
-
-        <!-- Merchant -->
-        <UInput v-model="formMerchant" placeholder="Estabelecimento..." class="w-full" />
-
-        <!-- Total + Installments -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Valor total</span>
-            <UInput
-              :value="formTotalAmountDisplay"
-              placeholder="R$ 0,00"
-              inputmode="numeric"
-              @input="handleTotalAmountInput"
-            />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Parcelas</span>
-            <UInput
-              v-model.number="formTotalInstallments"
-              type="number"
-              placeholder="1"
-              :min="1"
-              :max="72"
-              @change="recomputeInstallmentAmount"
-            />
-          </div>
-        </div>
-
-        <!-- Installment amount + Current installment -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Valor da parcela</span>
-            <UInput
-              :value="formInstallmentAmountDisplay"
-              placeholder="R$ 0,00"
-              inputmode="numeric"
-              @input="handleInstallmentAmountInput"
-            />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Parcela atual</span>
-            <UInput
-              v-model.number="formCurrentInstallment"
-              type="number"
-              placeholder="1"
-              :min="1"
-              :max="formTotalInstallments"
-            />
-          </div>
-        </div>
-
-        <!-- Dates -->
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Data da compra</span>
-            <UInput v-model="formDate" type="date" />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-gray-600">Vencimento</span>
-            <UInput v-model="formDueDate" type="date" />
-          </div>
-        </div>
-
-        <!-- Card + Category -->
-        <div class="grid grid-cols-2 gap-3">
-          <USelectMenu v-model="formCard" :items="cardOptions" placeholder="Cartão..." />
-          <USelectMenu v-model="formCategory" :items="categoryOptions" placeholder="Categoria..." />
-        </div>
-
-        <!-- Actions -->
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <UButton variant="ghost" color="neutral" @click="cancelForm">Cancelar</UButton>
-          <UButton
-            type="submit"
-            :loading="saving"
-            :disabled="!formMerchant.trim() || !formTotalAmountRaw || saving"
-            :icon="editingId ? 'i-heroicons-check' : 'i-heroicons-plus'"
-          >
-            {{ editingId ? 'Salvar' : 'Adicionar' }}
-          </UButton>
-        </div>
-      </form>
-    </div>
-
     <!-- List -->
     <div class="rounded-xl border border-black/8 dark:border-white/8 overflow-hidden">
 
@@ -679,8 +589,7 @@ watch(analytics, () => nextTick(renderCharts))
         <div
           v-for="p in purchases"
           :key="p.id"
-          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors"
-          :class="editingId === p.id ? 'bg-black/[0.05] dark:bg-white/[0.05]' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'"
+          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
         >
           <!-- Date -->
           <span class="text-xs text-gray-500 tabular-nums w-14 shrink-0">
@@ -751,6 +660,100 @@ watch(analytics, () => nextTick(renderCharts))
       </template>
 
     </div>
+
+    <!-- Form modal -->
+    <UModal v-model:open="showForm" :title="editingId ? 'Editar compra' : 'Nova compra no crédito'">
+      <template #body>
+        <form class="space-y-3" @submit.prevent="savePurchase">
+          <!-- Merchant -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs text-gray-600">Estabelecimento</span>
+            <UInput v-model="formMerchant" placeholder="Nome do estabelecimento..." class="w-full" />
+          </div>
+
+          <!-- Total + Installments -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Valor total</span>
+              <UInput
+                :value="formTotalAmountDisplay"
+                placeholder="R$ 0,00"
+                inputmode="numeric"
+                @input="handleTotalAmountInput"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Parcelas</span>
+              <UInput
+                v-model.number="formTotalInstallments"
+                type="number"
+                placeholder="1"
+                :min="1"
+                :max="72"
+                @change="recomputeInstallmentAmount"
+              />
+            </div>
+          </div>
+
+          <!-- Installment amount + Current installment -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Valor da parcela</span>
+              <UInput
+                :value="formInstallmentAmountDisplay"
+                placeholder="R$ 0,00"
+                inputmode="numeric"
+                @input="handleInstallmentAmountInput"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Parcela atual</span>
+              <UInput
+                v-model.number="formCurrentInstallment"
+                type="number"
+                placeholder="1"
+                :min="1"
+                :max="formTotalInstallments"
+              />
+            </div>
+          </div>
+
+          <!-- Dates -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Data da compra</span>
+              <UInput v-model="formDate" type="date" />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Vencimento</span>
+              <UInput v-model="formDueDate" type="date" />
+            </div>
+          </div>
+
+          <!-- Card + Category -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Cartão</span>
+              <USelectMenu v-model="formCard" :items="cardOptions" placeholder="Selecione..." />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Categoria</span>
+              <USelectMenu v-model="formCategory" :items="categoryOptions" placeholder="Selecione..." />
+            </div>
+          </div>
+        </form>
+      </template>
+      <template #actions>
+        <UButton variant="ghost" color="neutral" @click="cancelForm">Cancelar</UButton>
+        <UButton
+          :loading="saving"
+          :disabled="!formMerchant.trim() || !formTotalAmountRaw || saving"
+          @click="savePurchase"
+        >
+          {{ editingId ? 'Salvar' : 'Adicionar' }}
+        </UButton>
+      </template>
+    </UModal>
 
     <UModal
       v-model:open="confirmDeleteOpen"

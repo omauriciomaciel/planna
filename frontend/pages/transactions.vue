@@ -181,91 +181,9 @@ onMounted(() => {
           {{ loading ? 'Carregando...' : `${transactions.length} lançamentos` }}
         </p>
       </div>
-      <UButton icon="i-heroicons-plus" @click="editingId ? cancelForm() : (showForm = !showForm)">
+      <UButton icon="i-heroicons-plus" @click="cancelForm(); showForm = true">
         Novo lançamento
       </UButton>
-    </div>
-
-    <!-- Add form -->
-    <div v-if="showForm" class="rounded-xl border border-black/8 dark:border-white/8 bg-black/[0.03] dark:bg-white/[0.03] p-5 mb-4">
-      <div class="flex items-center justify-between mb-4">
-        <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">
-          {{ editingId ? 'Editar lançamento' : 'Novo lançamento' }}
-        </label>
-        <!-- Type toggle -->
-        <div class="flex rounded-lg overflow-hidden border border-black/8 dark:border-white/8 text-sm">
-          <button
-            type="button"
-            :class="formType === 'expense'
-              ? 'bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400'
-              : 'text-gray-500 hover:text-gray-300'"
-            class="px-4 py-1.5 font-medium transition-colors border-r border-black/8 dark:border-white/8"
-            @click="formType = 'expense'"
-          >
-            Saída
-          </button>
-          <button
-            type="button"
-            :class="formType === 'income'
-              ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-              : 'text-gray-500 hover:text-gray-300'"
-            class="px-4 py-1.5 font-medium transition-colors"
-            @click="formType = 'income'"
-          >
-            Entrada
-          </button>
-        </div>
-      </div>
-
-      <form class="space-y-3" @submit.prevent="saveTransaction">
-        <!-- Description -->
-        <UInput
-          v-model="formDescription"
-          placeholder="Descrição do lançamento..."
-          class="w-full"
-        />
-
-        <!-- Amount + Date -->
-        <div class="grid grid-cols-2 gap-3">
-          <UInput
-            :value="formAmountDisplay"
-            placeholder="R$ 0,00"
-            inputmode="numeric"
-            @input="handleAmountInput"
-          />
-          <UInput v-model="formDate" type="date" />
-        </div>
-
-        <!-- Account + Category -->
-        <div class="grid grid-cols-2 gap-3">
-          <USelectMenu
-            v-model="formAccount"
-            :items="accountOptions"
-            placeholder="Conta..."
-          />
-          <USelectMenu
-            v-model="formCategory"
-            :items="categoryOptions"
-            placeholder="Categoria..."
-          />
-        </div>
-
-        <!-- Status + Actions -->
-        <div class="flex items-center justify-between pt-1">
-          <UCheckbox v-model="formPaid" label="Marcar como pago" />
-          <div class="flex gap-2">
-            <UButton variant="ghost" color="neutral" @click="cancelForm">Cancelar</UButton>
-            <UButton
-              type="submit"
-              :loading="saving"
-              :disabled="!formDescription.trim() || !formAmountRaw || saving"
-              :icon="editingId ? 'i-heroicons-check' : 'i-heroicons-plus'"
-            >
-              {{ editingId ? 'Salvar' : 'Adicionar' }}
-            </UButton>
-          </div>
-        </div>
-      </form>
     </div>
 
     <!-- Transaction list -->
@@ -318,8 +236,7 @@ onMounted(() => {
         <div
           v-for="tx in transactions"
           :key="tx.id"
-          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors"
-          :class="editingId === tx.id ? 'bg-black/[0.05] dark:bg-white/[0.05]' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'"
+          class="group flex items-center gap-4 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
         >
           <!-- Date -->
           <span class="text-xs text-gray-500 tabular-nums w-14 shrink-0">
@@ -387,6 +304,97 @@ onMounted(() => {
       </template>
 
     </div>
+
+    <!-- Form modal -->
+    <UModal v-model:open="showForm" :title="editingId ? 'Editar lançamento' : 'Novo lançamento'">
+      <template #body>
+        <form class="space-y-3" @submit.prevent="saveTransaction">
+          <!-- Type toggle -->
+          <div class="flex rounded-lg overflow-hidden border border-black/8 dark:border-white/8 text-sm">
+            <button
+              type="button"
+              :class="formType === 'expense'
+                ? 'bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400'
+                : 'text-gray-500 hover:text-gray-300'"
+              class="flex-1 px-4 py-1.5 font-medium transition-colors border-r border-black/8 dark:border-white/8"
+              @click="formType = 'expense'"
+            >
+              Saída
+            </button>
+            <button
+              type="button"
+              :class="formType === 'income'
+                ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                : 'text-gray-500 hover:text-gray-300'"
+              class="flex-1 px-4 py-1.5 font-medium transition-colors"
+              @click="formType = 'income'"
+            >
+              Entrada
+            </button>
+          </div>
+
+          <!-- Description -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs text-gray-600">Descrição</span>
+            <UInput
+              v-model="formDescription"
+              placeholder="Descrição do lançamento..."
+              class="w-full"
+            />
+          </div>
+
+          <!-- Amount + Date -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Valor</span>
+              <UInput
+                :value="formAmountDisplay"
+                placeholder="R$ 0,00"
+                inputmode="numeric"
+                @input="handleAmountInput"
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Data</span>
+              <UInput v-model="formDate" type="date" />
+            </div>
+          </div>
+
+          <!-- Account + Category -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Conta</span>
+              <USelectMenu
+                v-model="formAccount"
+                :items="accountOptions"
+                placeholder="Selecione..."
+              />
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <span class="text-xs text-gray-600">Categoria</span>
+              <USelectMenu
+                v-model="formCategory"
+                :items="categoryOptions"
+                placeholder="Selecione..."
+              />
+            </div>
+          </div>
+
+          <!-- Status -->
+          <UCheckbox v-model="formPaid" label="Marcar como pago" />
+        </form>
+      </template>
+      <template #actions>
+        <UButton variant="ghost" color="neutral" @click="cancelForm">Cancelar</UButton>
+        <UButton
+          :loading="saving"
+          :disabled="!formDescription.trim() || !formAmountRaw || saving"
+          @click="saveTransaction"
+        >
+          {{ editingId ? 'Salvar' : 'Adicionar' }}
+        </UButton>
+      </template>
+    </UModal>
 
     <UModal
       v-model:open="confirmDeleteOpen"
