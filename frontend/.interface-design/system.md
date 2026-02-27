@@ -322,6 +322,55 @@ Para listas com múltiplas colunas (lançamentos, crédito):
 
 ---
 
+## Delete Confirmation Modal Pattern
+
+Um único estado de confirmação por página. O modal recebe o nome do item e um callback — não sabe o que está deletando.
+
+```ts
+const confirmDeleteOpen = ref(false)
+const deleteTargetLabel = ref('')
+const deleteTargetFn = ref<(() => Promise<void>) | null>(null)
+const deleting = ref(false)
+
+function requestDelete(label: string, fn: () => Promise<void>) {
+  deleteTargetLabel.value = label
+  deleteTargetFn.value = fn
+  confirmDeleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTargetFn.value) return
+  deleting.value = true
+  try {
+    await deleteTargetFn.value()
+  } finally {
+    deleting.value = false
+    confirmDeleteOpen.value = false
+  }
+}
+```
+
+```html
+<!-- No botão de exclusão -->
+@click="requestDelete(item.name, () => deleteItem(item.id))"
+
+<!-- Modal (no final do template) -->
+<UModal
+  v-model:open="confirmDeleteOpen"
+  title="Excluir [recurso]?"
+  :description="`&quot;${deleteTargetLabel}&quot; será removido permanentemente.`"
+>
+  <template #actions>
+    <UButton variant="ghost" color="neutral" @click="confirmDeleteOpen = false">Cancelar</UButton>
+    <UButton color="error" :loading="deleting" @click="confirmDelete">Excluir</UButton>
+  </template>
+</UModal>
+```
+
+**Páginas que usam:** transactions, credit, accounts (conta e cartão), categories.
+
+---
+
 ## Signature Elements por Domínio
 
 ### Crédito (`/credit`)

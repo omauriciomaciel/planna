@@ -166,6 +166,29 @@ async function deletePurchase(id: string) {
   await loadPurchases()
 }
 
+// Delete confirmation
+const confirmDeleteOpen = ref(false)
+const deleteTargetLabel = ref('')
+const deleteTargetFn = ref<(() => Promise<void>) | null>(null)
+const deleting = ref(false)
+
+function requestDelete(label: string, fn: () => Promise<void>) {
+  deleteTargetLabel.value = label
+  deleteTargetFn.value = fn
+  confirmDeleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTargetFn.value) return
+  deleting.value = true
+  try {
+    await deleteTargetFn.value()
+  } finally {
+    deleting.value = false
+    confirmDeleteOpen.value = false
+  }
+}
+
 function formatDate(dateStr: string) {
   const [, month, day] = dateStr.split('-')
   return `${day}/${month}`
@@ -412,12 +435,23 @@ onMounted(() => {
               icon="i-heroicons-trash"
               size="xs"
               class="opacity-0 group-hover:opacity-100 transition-opacity"
-              @click="deletePurchase(p.id)"
+              @click="requestDelete(p.merchant, () => deletePurchase(p.id))"
             />
           </div>
         </div>
       </template>
 
     </div>
+
+    <UModal
+      v-model:open="confirmDeleteOpen"
+      title="Excluir compra?"
+      :description="`&quot;${deleteTargetLabel}&quot; será removido permanentemente.`"
+    >
+      <template #actions>
+        <UButton variant="ghost" color="neutral" @click="confirmDeleteOpen = false">Cancelar</UButton>
+        <UButton color="error" :loading="deleting" @click="confirmDelete">Excluir</UButton>
+      </template>
+    </UModal>
   </div>
 </template>

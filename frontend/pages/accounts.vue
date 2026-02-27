@@ -141,6 +141,29 @@ async function deleteCard(id: string) {
   await loadData()
 }
 
+// Delete confirmation
+const confirmDeleteOpen = ref(false)
+const deleteTargetLabel = ref('')
+const deleteTargetFn = ref<(() => Promise<void>) | null>(null)
+const deleting = ref(false)
+
+function requestDelete(label: string, fn: () => Promise<void>) {
+  deleteTargetLabel.value = label
+  deleteTargetFn.value = fn
+  confirmDeleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTargetFn.value) return
+  deleting.value = true
+  try {
+    await deleteTargetFn.value()
+  } finally {
+    deleting.value = false
+    confirmDeleteOpen.value = false
+  }
+}
+
 function accountNameForCard(card: CreditCard): string | null {
   if (!card.account_id) return null
   return accounts.value.find(a => a.id === card.account_id)?.name ?? null
@@ -306,7 +329,7 @@ onMounted(loadData)
               icon="i-heroicons-trash"
               size="xs"
               class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-              @click="deleteAccount(account.id)"
+              @click="requestDelete(account.name, () => deleteAccount(account.id))"
             />
           </div>
         </template>
@@ -367,12 +390,23 @@ onMounted(loadData)
               icon="i-heroicons-trash"
               size="xs"
               class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-              @click="deleteCard(card.id)"
+              @click="requestDelete(card.name, () => deleteCard(card.id))"
             />
           </div>
         </template>
       </div>
 
     </div>
+
+    <UModal
+      v-model:open="confirmDeleteOpen"
+      title="Confirmar exclusão"
+      :description="`&quot;${deleteTargetLabel}&quot; será removido permanentemente.`"
+    >
+      <template #actions>
+        <UButton variant="ghost" color="neutral" @click="confirmDeleteOpen = false">Cancelar</UButton>
+        <UButton color="error" :loading="deleting" @click="confirmDelete">Excluir</UButton>
+      </template>
+    </UModal>
   </div>
 </template>

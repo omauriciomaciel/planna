@@ -81,6 +81,29 @@ async function deleteCategory(id: string) {
   await loadCategories()
 }
 
+// Delete confirmation
+const confirmDeleteOpen = ref(false)
+const deleteTargetLabel = ref('')
+const deleteTargetFn = ref<(() => Promise<void>) | null>(null)
+const deleting = ref(false)
+
+function requestDelete(label: string, fn: () => Promise<void>) {
+  deleteTargetLabel.value = label
+  deleteTargetFn.value = fn
+  confirmDeleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTargetFn.value) return
+  deleting.value = true
+  try {
+    await deleteTargetFn.value()
+  } finally {
+    deleting.value = false
+    confirmDeleteOpen.value = false
+  }
+}
+
 onMounted(loadCategories)
 </script>
 
@@ -201,12 +224,23 @@ onMounted(loadCategories)
               icon="i-heroicons-trash"
               size="xs"
               class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-              @click="deleteCategory(cat.id)"
+              @click="requestDelete(cat.name, () => deleteCategory(cat.id))"
             />
           </div>
         </template>
 
       </div>
     </div>
+
+    <UModal
+      v-model:open="confirmDeleteOpen"
+      title="Excluir categoria?"
+      :description="`&quot;${deleteTargetLabel}&quot; será removida permanentemente.`"
+    >
+      <template #actions>
+        <UButton variant="ghost" color="neutral" @click="confirmDeleteOpen = false">Cancelar</UButton>
+        <UButton color="error" :loading="deleting" @click="confirmDelete">Excluir</UButton>
+      </template>
+    </UModal>
   </div>
 </template>
