@@ -3,8 +3,6 @@ definePageMeta({ middleware: 'auth' })
 
 const api = useApi()
 const { format } = useCurrency()
-const colorMode = useColorMode()
-const isDark = computed(() => colorMode.value === 'dark')
 
 // --- Types ---
 interface CreditPurchase {
