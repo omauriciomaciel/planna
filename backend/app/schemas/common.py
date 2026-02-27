@@ -22,12 +22,16 @@ class NamedItemResponse(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     emoji: str | None = None
+    category_type: str | None = None  # "income" or "expense"
+    classification: str | None = None  # "essential" or "non_essential"
 
 
 class CategoryUpdate(BaseModel):
     name: str | None = None
     emoji: str | None = None
     sort_order: int | None = None
+    category_type: str | None = None
+    classification: str | None = None
 
 
 class CategoryResponse(BaseModel):
@@ -35,6 +39,8 @@ class CategoryResponse(BaseModel):
     name: str
     emoji: str | None
     sort_order: int
+    category_type: str | None
+    classification: str | None
 
     model_config = {"from_attributes": True}
 

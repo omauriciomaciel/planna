@@ -144,7 +144,14 @@ async def list_categories(
         .order_by(Category.sort_order, Category.name)
     )
     return [
-        CategoryResponse(id=str(c.id), name=c.name, emoji=c.emoji, sort_order=c.sort_order)
+        CategoryResponse(
+            id=str(c.id),
+            name=c.name,
+            emoji=c.emoji,
+            sort_order=c.sort_order,
+            category_type=c.category_type,
+            classification=c.classification,
+        )
         for c in result.scalars().all()
     ]
 
@@ -155,12 +162,23 @@ async def create_category(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    cat = Category(user_id=user.id, name=data.name, emoji=data.emoji)
+    cat = Category(
+        user_id=user.id,
+        name=data.name,
+        emoji=data.emoji,
+        category_type=data.category_type,
+        classification=data.classification,
+    )
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
     return CategoryResponse(
-        id=str(cat.id), name=cat.name, emoji=cat.emoji, sort_order=cat.sort_order
+        id=str(cat.id),
+        name=cat.name,
+        emoji=cat.emoji,
+        sort_order=cat.sort_order,
+        category_type=cat.category_type,
+        classification=cat.classification,
     )
 
 
@@ -186,7 +204,12 @@ async def update_category(
     await db.commit()
     await db.refresh(cat)
     return CategoryResponse(
-        id=str(cat.id), name=cat.name, emoji=cat.emoji, sort_order=cat.sort_order
+        id=str(cat.id),
+        name=cat.name,
+        emoji=cat.emoji,
+        sort_order=cat.sort_order,
+        category_type=cat.category_type,
+        classification=cat.classification,
     )
 
 

@@ -1,10 +1,21 @@
+import enum
 import uuid
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
+
+
+class CategoryType(str, enum.Enum):
+    income = "income"
+    expense = "expense"
+
+
+class CategoryClassification(str, enum.Enum):
+    essential = "essential"
+    non_essential = "non_essential"
 
 
 class Category(Base, UUIDMixin, TimestampMixin):
@@ -16,5 +27,11 @@ class Category(Base, UUIDMixin, TimestampMixin):
     name: Mapped[str] = mapped_column(String(100))
     emoji: Mapped[str | None] = mapped_column(String(10), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    category_type: Mapped[CategoryType | None] = mapped_column(
+        Enum(CategoryType, name="categorytype"), nullable=True
+    )
+    classification: Mapped[CategoryClassification | None] = mapped_column(
+        Enum(CategoryClassification, name="categoryclassification"), nullable=True
+    )
 
     user = relationship("User", back_populates="categories")
