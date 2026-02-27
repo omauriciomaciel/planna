@@ -29,7 +29,7 @@ Estratégia dual light/dark — **sempre usar `dark:` prefix**:
 
 Nunca misturar sombras com essa estratégia.
 
-**Exceção — Dashboard (`/index`):** Os cards KPI e painéis de gráfico usam superfícies opacas `bg-white dark:bg-gray-900` com `border border-black/5 dark:border-white/5`. O dashboard é informacional e de leitura rápida — a superfície opaca dá presença visual aos cards, diferenciando-os do fundo `gray-50`/`gray-950`. Essa exceção não se aplica a nenhuma outra página.
+**Exceção — Painéis analíticos (dashboard `/index`, crédito `/credit`):** Cards KPI e painéis de gráfico usam superfícies opacas `bg-white dark:bg-gray-900` com `border border-black/5 dark:border-white/5`. São seções informacionais de leitura rápida — a superfície opaca dá presença visual, diferenciando-os do fundo `gray-50`/`gray-950`. Usar essa exceção apenas em páginas com seção de analytics/charts.
 
 ---
 
@@ -407,6 +407,83 @@ function installmentDots(current: number, total: number): boolean[] {
   <span class="text-xs text-gray-600 tabular-nums">{{ current }}/{{ total }}</span>
 </div>
 ```
+
+### Crédito — Analytics (`/credit`)
+**KPI cards + charts** com dados de crédito por cartão:
+
+```html
+<!-- KPI row: 4 cards, grid 2→4 colunas -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+  <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
+    <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Label</p>
+    <p class="text-2xl font-semibold text-violet-600 dark:text-violet-400 tabular-nums leading-none">Valor</p>
+    <p class="text-[11px] text-gray-400 dark:text-white/20 mt-2.5">Contexto</p>
+  </div>
+</div>
+
+<!-- Charts row: 2 colunas -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+    <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Título</h2>
+    <div ref="chartEl" class="h-[226px]" />
+  </div>
+</div>
+```
+
+**Paleta de barras por cartão** — violets degradados para manter identidade de crédito:
+```ts
+const CARD_COLORS = [
+  'rgba(139,92,246,0.7)',   // violet-500
+  'rgba(167,139,250,0.6)',  // violet-400
+  'rgba(196,181,253,0.5)',  // violet-300
+  'rgba(109,40,217,0.6)',   // violet-700
+  'rgba(221,214,254,0.45)', // violet-200
+]
+```
+
+**Commitment ring** — conic-gradient com thresholds semânticos:
+- < 70%: emerald `#34d399`
+- 70–90%: amber `#fbbf24`
+- > 90%: red `#f87171`
+
+Fundo do arco: `isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'`
+
+---
+
+### Plotly Chart Base Layout
+
+Layout base reutilizável para todos os charts (Plotly.js):
+
+```ts
+function getBaseLayout() {
+  const dark = isDark.value
+  return {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: {
+      color: dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)',
+      family: 'inherit',
+      size: 11,
+    },
+    hoverlabel: {
+      bgcolor: dark ? '#1f2937' : '#f9fafb',
+      bordercolor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+      font: { color: dark ? 'rgba(255,255,255,0.9)' : '#111827', size: 12 },
+    },
+  }
+}
+```
+
+**Padrões comuns de eixo:**
+- xaxis: `gridcolor: 'transparent'`, `linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'`
+- yaxis: `gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'`, `tickprefix: 'R$'`
+- Legenda horizontal: `orientation: 'h', x: 0, y: 1.18`
+- Config: `{ displayModeBar: false, responsive: true }`
+- Sempre `watch(isDark, renderCharts)` para re-render ao trocar tema
+
+**Páginas que usam Plotly:** dashboard (`/index`), crédito (`/credit`).
+
+---
 
 ### Contas (`/accounts`)
 **Saldo atual** colorido por sinal + saldo inicial muted abaixo:

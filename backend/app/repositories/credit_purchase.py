@@ -1,10 +1,12 @@
 import uuid
+from datetime import date
 
-from sqlalchemy import extract, select
+from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.category import Category
+from app.models.credit_card import CreditCard
 from app.models.credit_purchase import CreditPurchase
 from app.repositories.base import BaseRepository
 
@@ -90,6 +92,45 @@ class CreditPurchaseRepository(BaseRepository[CreditPurchase]):
             )
         )
         return result.all()
+
+    async def get_monthly_totals_by_card(
+        self, user_id: uuid.UUID, start: date, end: date
+    ) -> list:
+        """Sum installment_amount grouped by (year, month, card_name)."""
+        result = await self.db.execute(
+            select(
+                extract("year", CreditPurchase.due_date).label("yr"),
+                extract("month", CreditPurchase.due_date).label("mo"),
+                CreditCard.name.label("card_name"),
+                func.sum(CreditPurchase.installment_amount).label("total"),
+            )
+            .outerjoin(
+                CreditCard, CreditPurchase.credit_card_id == CreditCard.id
+            )
+            .where(
+                CreditPurchase.user_id == user_id,
+                CreditPurchase.due_date >= start,
+                CreditPurchase.due_date < end,
+            )
+            .group_by("yr", "mo", CreditCard.name)
+            .order_by("yr", "mo")
+        )
+        return result.all()
+
+    async def get_month_total(
+        self, user_id: uuid.UUID, year: int, month: int
+    ) -> float:
+        """Total installment_amount for a given month."""
+        result = await self.db.execute(
+            select(func.coalesce(
+                func.sum(CreditPurchase.installment_amount), 0
+            )).where(
+                CreditPurchase.user_id == user_id,
+                extract("year", CreditPurchase.due_date) == year,
+                extract("month", CreditPurchase.due_date) == month,
+            )
+        )
+        return float(result.scalar_one())
 
     async def get_categorized_descriptions(
         self, user_id: uuid.UUID

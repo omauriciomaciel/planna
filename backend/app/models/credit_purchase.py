@@ -27,7 +27,7 @@ class CreditPurchase(Base, UUIDMixin, TimestampMixin):
     installment_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     current_installment: Mapped[int] = mapped_column(Integer, default=1)
     total_installments: Mapped[int] = mapped_column(Integer, default=1)
-    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_date: Mapped[date] = mapped_column(Date)
 
     user = relationship("User", back_populates="credit_purchases")
     credit_card = relationship("CreditCard", back_populates="purchases")

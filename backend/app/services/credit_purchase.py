@@ -55,7 +55,7 @@ class CreditPurchaseService:
             installment_amount=data["installment_amount"],
             current_installment=data["current_installment"],
             total_installments=data["total_installments"],
-            due_date=data.get("due_date"),
+            due_date=data["due_date"],
         )
         self.repo.db.add(purchase)
         await self.repo.commit()

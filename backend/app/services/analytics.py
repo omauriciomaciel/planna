@@ -174,6 +174,94 @@ class AnalyticsService:
 
         return result
 
+    async def get_credit_analytics(
+        self, user_id: uuid.UUID, year: int, month: int, n: int = 6
+    ) -> dict:
+        """Credit-specific analytics: spending by card, monthly history, commitment."""
+        # Build month range for the last N months
+        months = []
+        for i in range(n - 1, -1, -1):
+            m = month - i
+            y = year
+            while m <= 0:
+                m += 12
+                y -= 1
+            months.append((y, m))
+
+        first_y, first_m = months[0]
+        start = date(first_y, first_m, 1)
+        # End: first day of month after last
+        last_y, last_m = months[-1]
+        if last_m == 12:
+            end = date(last_y + 1, 1, 1)
+        else:
+            end = date(last_y, last_m + 1, 1)
+
+        # Credit totals by card by month
+        card_rows = await self.credit_purchase_repo.get_monthly_totals_by_card(
+            user_id, start, end
+        )
+
+        # Build per-month data
+        history = []
+        for y, m in months:
+            label = f"{MONTH_ABBR[m - 1]}/{str(y)[2:]}"
+
+            # Credit total for this month
+            credit_total = Decimal("0")
+            cards_breakdown: dict[str, float] = {}
+            for row in card_rows:
+                if int(row.yr) == y and int(row.mo) == m:
+                    amt = float(row.total)
+                    card_name = row.card_name or "Sem cartão"
+                    cards_breakdown[card_name] = amt
+                    credit_total += row.total
+
+            # Income for commitment calculation
+            tx_rows = await self.transaction_repo.get_month_with_categories(
+                user_id, y, m
+            )
+            income = Decimal("0")
+            expenses = Decimal("0")
+            for tx, _ in tx_rows:
+                if tx.type == TransactionType.INCOME:
+                    income += tx.amount
+                else:
+                    expenses += tx.amount
+
+            total_expenses = expenses + credit_total
+            commitment = (
+                float(total_expenses / income) if income > 0 else 0.0
+            )
+
+            history.append({
+                "month": m,
+                "year": y,
+                "label": label,
+                "credit_total": float(credit_total),
+                "income": float(income),
+                "expenses": float(expenses),
+                "balance": float(income - total_expenses),
+                "commitment": commitment,
+                "cards": cards_breakdown,
+            })
+
+        # Current month summary
+        current = history[-1] if history else None
+
+        # Unique card names across all months for consistent chart series
+        all_cards = sorted({
+            card_name
+            for item in history
+            for card_name in item["cards"]
+        })
+
+        return {
+            "history": history,
+            "cards": all_cards,
+            "current_month": current,
+        }
+
     async def detect_outliers(
         self, user_id: uuid.UUID, year: int, month: int
     ) -> list[dict]:

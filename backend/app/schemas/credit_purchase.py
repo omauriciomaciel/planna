@@ -13,7 +13,7 @@ class CreditPurchaseCreate(BaseModel):
     installment_amount: Decimal
     current_installment: int = 1
     total_installments: int = 1
-    due_date: datetime.date | None = None
+    due_date: datetime.date
 
 
 class CreditPurchaseUpdate(BaseModel):
@@ -38,7 +38,7 @@ class CreditPurchaseResponse(BaseModel):
     installment_amount: Decimal
     current_installment: int
     total_installments: int
-    due_date: datetime.date | None
+    due_date: datetime.date
     credit_card_name: str | None = None
     category_name: str | None = None
 

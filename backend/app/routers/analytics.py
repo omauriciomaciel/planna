@@ -40,6 +40,17 @@ async def history(
     return await service.get_monthly_history(user.id, year, month, n)
 
 
+@router.get("/credit")
+async def credit_analytics(
+    year: int = Query(default_factory=lambda: date.today().year),
+    month: int = Query(default_factory=lambda: date.today().month),
+    n: int = Query(default=6, ge=2, le=24),
+    user: User = Depends(get_current_user),
+    service: AnalyticsService = Depends(get_analytics_service),
+):
+    return await service.get_credit_analytics(user.id, year, month, n)
+
+
 @router.get("/outliers")
 async def outliers(
     year: int = Query(default_factory=lambda: date.today().year),

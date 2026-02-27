@@ -167,7 +167,7 @@ onUnmounted(() => {
   <div class="min-h-screen bg-white dark:bg-gray-950 lg:grid lg:grid-cols-2">
     <!-- Brand panel — desktop only -->
     <div
-      class="hidden lg:flex flex-col justify-between p-14 relative overflow-hidden border-r border-white/5"
+      class="hidden lg:flex flex-col justify-between p-14 relative overflow-hidden border-r border-black/5 dark:border-white/5"
       style="background-color: #0e1411"
     >
       <!-- Ledger dot grid -->
