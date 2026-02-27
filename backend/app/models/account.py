@@ -20,6 +20,7 @@ class Account(Base, UUIDMixin, TimestampMixin):
     user = relationship("User", back_populates="accounts")
     bank = relationship("Bank", back_populates="accounts")
     transactions = relationship("Transaction", back_populates="account")
+    credit_cards = relationship("CreditCard", back_populates="account")
 
     @property
     def name(self) -> str:

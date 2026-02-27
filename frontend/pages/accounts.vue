@@ -17,9 +17,10 @@ interface Account {
   bank: Bank | null
 }
 
-interface NamedItem {
+interface CreditCard {
   id: string
   name: string
+  account_id: string | null
 }
 
 interface BankOption {
@@ -29,16 +30,23 @@ interface BankOption {
   bankIspb: string
 }
 
+interface AccountOption {
+  label: string
+  value: string
+}
+
 const accounts = ref<Account[]>([])
-const cards = ref<NamedItem[]>([])
+const cards = ref<CreditCard[]>([])
 const bankOptions = ref<BankOption[]>([])
+const accountOptions = ref<AccountOption[]>([])
 const selectedBank = ref<BankOption | undefined>(undefined)
 const newCard = ref('')
+const selectedCardAccount = ref<AccountOption | undefined>(undefined)
 
 async function loadData() {
   const [accs, cds, banks] = await Promise.all([
     api.get<Account[]>('/accounts'),
-    api.get<NamedItem[]>('/credit-cards'),
+    api.get<CreditCard[]>('/credit-cards'),
     api.get<Bank[]>('/banks'),
   ])
   accounts.value = accs
@@ -49,6 +57,7 @@ async function loadData() {
     bankName: b.full_name,
     bankIspb: b.ispb,
   }))
+  accountOptions.value = accs.map(a => ({ label: a.name, value: a.id }))
 }
 
 async function addAccount() {
@@ -65,14 +74,23 @@ async function deleteAccount(id: string) {
 
 async function addCard() {
   if (!newCard.value.trim()) return
-  await api.post('/credit-cards', { name: newCard.value.trim() })
+  await api.post('/credit-cards', {
+    name: newCard.value.trim(),
+    account_id: selectedCardAccount.value?.value ?? null,
+  })
   newCard.value = ''
+  selectedCardAccount.value = undefined
   await loadData()
 }
 
 async function deleteCard(id: string) {
   await api.delete(`/credit-cards/${id}`)
   await loadData()
+}
+
+function accountNameForCard(card: CreditCard): string | null {
+  if (!card.account_id) return null
+  return accounts.value.find(a => a.id === card.account_id)?.name ?? null
 }
 
 onMounted(loadData)
@@ -132,9 +150,19 @@ onMounted(loadData)
           <h2 class="font-semibold text-white">Cartões de Crédito</h2>
         </template>
 
-        <form class="flex gap-3 mb-4" @submit.prevent="addCard">
-          <UInput v-model="newCard" placeholder="Nome do cartão" class="flex-1" />
-          <UButton type="submit" icon="i-heroicons-plus">Adicionar</UButton>
+        <form class="flex flex-col gap-2 mb-4" @submit.prevent="addCard">
+          <div class="flex gap-3">
+            <UInput v-model="newCard" placeholder="Nome do cartão" class="flex-1" />
+            <UButton type="submit" icon="i-heroicons-plus" :disabled="!newCard.trim()">
+              Adicionar
+            </UButton>
+          </div>
+          <USelectMenu
+            v-model="selectedCardAccount"
+            :items="accountOptions"
+            placeholder="Vincular a uma conta (opcional)"
+            class="w-full"
+          />
         </form>
 
         <div class="divide-y divide-gray-800">
@@ -143,7 +171,12 @@ onMounted(loadData)
             :key="card.id"
             class="flex items-center justify-between py-3"
           >
-            <span class="text-white">{{ card.name }}</span>
+            <div class="flex flex-col">
+              <span class="text-white text-sm font-medium">{{ card.name }}</span>
+              <span v-if="accountNameForCard(card)" class="text-gray-400 text-xs">
+                {{ accountNameForCard(card) }}
+              </span>
+            </div>
             <UButton
               variant="ghost"
               color="error"

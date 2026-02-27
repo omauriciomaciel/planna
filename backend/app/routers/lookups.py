@@ -19,8 +19,8 @@ from app.schemas.common import (
     CategoryCreate,
     CategoryResponse,
     CategoryUpdate,
-    NamedItemCreate,
-    NamedItemResponse,
+    CreditCardCreate,
+    CreditCardResponse,
 )
 
 router = APIRouter(tags=["lookups"])
@@ -84,27 +84,31 @@ async def delete_account(
 
 # --- Credit Cards ---
 
-@router.get("/credit-cards", response_model=list[NamedItemResponse])
+@router.get("/credit-cards", response_model=list[CreditCardResponse])
 async def list_credit_cards(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
         select(CreditCard).where(CreditCard.user_id == user.id).order_by(CreditCard.name)
     )
-    return [NamedItemResponse(id=str(c.id), name=c.name) for c in result.scalars().all()]
+    return result.scalars().all()
 
 
-@router.post("/credit-cards", response_model=NamedItemResponse, status_code=201)
+@router.post("/credit-cards", response_model=CreditCardResponse, status_code=201)
 async def create_credit_card(
-    data: NamedItemCreate,
+    data: CreditCardCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    card = CreditCard(user_id=user.id, name=data.name)
+    card = CreditCard(
+        user_id=user.id,
+        name=data.name,
+        account_id=uuid.UUID(data.account_id) if data.account_id else None,
+    )
     db.add(card)
     await db.commit()
     await db.refresh(card)
-    return NamedItemResponse(id=str(card.id), name=card.name)
+    return card
 
 
 @router.delete("/credit-cards/{card_id}", status_code=204)

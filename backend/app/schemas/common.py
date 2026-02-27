@@ -60,6 +60,19 @@ class AccountResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CreditCardCreate(BaseModel):
+    name: str
+    account_id: str | None = None
+
+
+class CreditCardResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    account_id: uuid.UUID | None
+
+    model_config = {"from_attributes": True}
+
+
 class UserSettingsUpdate(BaseModel):
     auto_categorize: bool | None = None
     notify_due_expenses: bool | None = None

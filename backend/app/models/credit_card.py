@@ -14,6 +14,13 @@ class CreditCard(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     name: Mapped[str] = mapped_column(String(100))
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     user = relationship("User", back_populates="credit_cards")
+    account = relationship("Account", back_populates="credit_cards")
     purchases = relationship("CreditPurchase", back_populates="credit_card")
