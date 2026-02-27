@@ -16,6 +16,8 @@ interface Account {
   name: string
   bank_ispb: string | null
   bank: Bank | null
+  initial_balance: number
+  current_balance: number
 }
 
 interface CreditCard {
@@ -46,7 +48,18 @@ const loading = ref(true)
 
 // Account form
 const selectedBank = ref<BankOption | undefined>(undefined)
+const newAccountInitialBalance = ref(0)
+const newAccountInitialBalanceDisplay = ref('')
 const savingAccount = ref(false)
+
+function handleInitialBalanceInput(e: Event) {
+  const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '')
+  const cents = parseInt(digits || '0', 10)
+  newAccountInitialBalance.value = cents / 100
+  newAccountInitialBalanceDisplay.value = cents > 0
+    ? (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : ''
+}
 
 // Card form
 const newCard = ref('')
@@ -87,8 +100,13 @@ async function loadData() {
 async function addAccount() {
   if (!selectedBank.value) return
   savingAccount.value = true
-  await api.post('/accounts', { bank_ispb: selectedBank.value.bankIspb })
+  await api.post('/accounts', {
+    bank_ispb: selectedBank.value.bankIspb,
+    initial_balance: newAccountInitialBalance.value,
+  })
   selectedBank.value = undefined
+  newAccountInitialBalance.value = 0
+  newAccountInitialBalanceDisplay.value = ''
   await loadData()
   savingAccount.value = false
 }
@@ -153,26 +171,40 @@ onMounted(loadData)
       <!-- ── Row 2: Forms (mesmo grid row = mesma altura) ── -->
 
       <!-- Add account form -->
-      <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-1.5">
-        <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Banco</label>
-        <form class="flex gap-2" @submit.prevent="addAccount">
-          <USelectMenu
-            v-model="selectedBank"
-            :items="bankOptions"
-            placeholder="Buscar banco pelo nome ou código..."
-            searchable
-            search-placeholder="Ex: Bradesco, 237..."
-            class="flex-1 min-w-0"
+      <form class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-4" @submit.prevent="addAccount">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Banco</label>
+          <div class="flex gap-2">
+            <USelectMenu
+              v-model="selectedBank"
+              :items="bankOptions"
+              placeholder="Buscar banco pelo nome ou código..."
+              searchable
+              search-placeholder="Ex: Bradesco, 237..."
+              class="flex-1 min-w-0"
+            />
+            <UButton
+              type="submit"
+              icon="i-heroicons-plus"
+              :loading="savingAccount"
+              :disabled="!selectedBank || savingAccount"
+              class="shrink-0"
+            />
+          </div>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            Saldo inicial
+          </label>
+          <UInput
+            :value="newAccountInitialBalanceDisplay"
+            type="text"
+            placeholder="R$ 0,00"
+            inputmode="numeric"
+            @input="handleInitialBalanceInput"
           />
-          <UButton
-            type="submit"
-            icon="i-heroicons-plus"
-            :loading="savingAccount"
-            :disabled="!selectedBank || savingAccount"
-            class="shrink-0"
-          />
-        </form>
-      </div>
+        </div>
+      </form>
 
       <!-- Add card form -->
       <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-4">
@@ -255,6 +287,17 @@ onMounted(loadData)
               <p class="text-sm font-medium text-white truncate">{{ account.name }}</p>
               <p v-if="account.bank?.code" class="text-xs text-gray-500">
                 Código {{ account.bank.code }} · ISPB {{ account.bank_ispb }}
+              </p>
+            </div>
+            <div class="text-right shrink-0 mr-1">
+              <p
+                class="text-sm font-medium tabular-nums"
+                :class="account.current_balance >= 0 ? 'text-emerald-400' : 'text-red-400'"
+              >
+                {{ formatCurrency(account.current_balance) }}
+              </p>
+              <p class="text-xs text-gray-600 tabular-nums">
+                inicial {{ formatCurrency(account.initial_balance) }}
               </p>
             </div>
             <UButton

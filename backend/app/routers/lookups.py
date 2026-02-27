@@ -1,7 +1,8 @@
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,10 +12,12 @@ from app.models.account import Account
 from app.models.bank import Bank
 from app.models.category import Category
 from app.models.credit_card import CreditCard
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.common import (
     AccountCreate,
     AccountResponse,
+    AccountUpdate,
     BankResponse,
     CategoryCreate,
     CategoryResponse,
@@ -39,18 +42,52 @@ async def list_banks(
 
 # --- Accounts ---
 
+def _build_account_response(acc: Account, income: Decimal, expense: Decimal) -> AccountResponse:
+    current_balance = acc.initial_balance + income - expense
+    return AccountResponse(
+        id=acc.id,
+        name=acc.name,
+        bank_ispb=acc.bank_ispb,
+        bank=acc.bank,
+        initial_balance=acc.initial_balance,
+        current_balance=current_balance,
+    )
+
+
 @router.get("/accounts", response_model=list[AccountResponse])
 async def list_accounts(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
+    accounts_result = await db.execute(
         select(Account)
         .where(Account.user_id == user.id)
         .options(selectinload(Account.bank))
         .join(Bank, Account.bank_ispb == Bank.ispb, isouter=True)
         .order_by(Bank.full_name)
     )
-    return result.scalars().all()
+    accounts = accounts_result.scalars().all()
+
+    income_expr = func.sum(
+        case((Transaction.type == "income", Transaction.amount), else_=0)
+    ).label("income_sum")
+    expense_expr = func.sum(
+        case((Transaction.type == "expense", Transaction.amount), else_=0)
+    ).label("expense_sum")
+    sums_result = await db.execute(
+        select(Transaction.account_id, income_expr, expense_expr)
+        .where(Transaction.user_id == user.id, Transaction.account_id.is_not(None))
+        .group_by(Transaction.account_id)
+    )
+    sums_by_account = {row.account_id: (row.income_sum, row.expense_sum) for row in sums_result}
+
+    return [
+        _build_account_response(
+            acc,
+            Decimal(sums_by_account.get(acc.id, (0, 0))[0] or 0),
+            Decimal(sums_by_account.get(acc.id, (0, 0))[1] or 0),
+        )
+        for acc in accounts
+    ]
 
 
 @router.post("/accounts", response_model=AccountResponse, status_code=201)
@@ -59,11 +96,51 @@ async def create_account(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    account = Account(user_id=user.id, bank_ispb=data.bank_ispb)
+    account = Account(
+        user_id=user.id, bank_ispb=data.bank_ispb, initial_balance=data.initial_balance
+    )
     db.add(account)
     await db.commit()
     await db.refresh(account, ["bank"])
-    return account
+    return _build_account_response(account, Decimal("0"), Decimal("0"))
+
+
+@router.patch("/accounts/{account_id}", response_model=AccountResponse)
+async def update_account(
+    account_id: str,
+    data: AccountUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Account)
+        .where(Account.id == uuid.UUID(account_id), Account.user_id == user.id)
+        .options(selectinload(Account.bank))
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    account.initial_balance = data.initial_balance
+    await db.commit()
+    await db.refresh(account, ["bank"])
+
+    income_expr = func.sum(
+        case((Transaction.type == "income", Transaction.amount), else_=0)
+    ).label("income_sum")
+    expense_expr = func.sum(
+        case((Transaction.type == "expense", Transaction.amount), else_=0)
+    ).label("expense_sum")
+    sums_result = await db.execute(
+        select(income_expr, expense_expr)
+        .where(Transaction.user_id == user.id, Transaction.account_id == account.id)
+    )
+    row = sums_result.one()
+    return _build_account_response(
+        account,
+        Decimal(row.income_sum or 0),
+        Decimal(row.expense_sum or 0),
+    )
 
 
 @router.delete("/accounts/{account_id}", status_code=204)

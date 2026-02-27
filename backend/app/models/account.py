@@ -1,6 +1,7 @@
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +17,7 @@ class Account(Base, UUIDMixin, TimestampMixin):
     bank_ispb: Mapped[str | None] = mapped_column(
         String(8), ForeignKey("banks.ispb", ondelete="SET NULL"), nullable=True, index=True
     )
+    initial_balance: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, server_default="0")
 
     user = relationship("User", back_populates="accounts")
     bank = relationship("Bank", back_populates="accounts")

@@ -56,6 +56,11 @@ class BankResponse(BaseModel):
 
 class AccountCreate(BaseModel):
     bank_ispb: str
+    initial_balance: Decimal = Decimal("0")
+
+
+class AccountUpdate(BaseModel):
+    initial_balance: Decimal
 
 
 class AccountResponse(BaseModel):
@@ -63,8 +68,8 @@ class AccountResponse(BaseModel):
     name: str
     bank_ispb: str | None
     bank: BankResponse | None
-
-    model_config = {"from_attributes": True}
+    initial_balance: Decimal
+    current_balance: Decimal
 
 
 class CreditCardCreate(BaseModel):
