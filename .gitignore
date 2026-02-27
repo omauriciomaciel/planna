@@ -191,6 +191,17 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Node / Nuxt
+frontend/node_modules/
+frontend/.nuxt/
+frontend/.output/
+
+# Spreadsheets de referência
+*.xlsx
+
+# Claude Code (configuração local do usuário)
+.claude/settings.local.json
+
 # PyPI configuration file
 .pypirc
 
