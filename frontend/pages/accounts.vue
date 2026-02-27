@@ -2,6 +2,7 @@
 definePageMeta({ middleware: 'auth' })
 
 const api = useApi()
+const { format: formatCurrency } = useCurrency()
 
 interface Bank {
   ispb: string
@@ -29,7 +30,6 @@ interface CreditCard {
 interface BankOption {
   label: string
   value: string
-  bankName: string
   bankIspb: string
 }
 
@@ -42,13 +42,20 @@ const accounts = ref<Account[]>([])
 const cards = ref<CreditCard[]>([])
 const bankOptions = ref<BankOption[]>([])
 const accountOptions = ref<AccountOption[]>([])
+const loading = ref(true)
+
+// Account form
 const selectedBank = ref<BankOption | undefined>(undefined)
+const savingAccount = ref(false)
+
+// Card form
 const newCard = ref('')
 const selectedCardAccount = ref<AccountOption | undefined>(undefined)
 const newCardDueDay = ref<number | null>(null)
 const newCardClosingDay = ref<number | null>(null)
 const newCardLimit = ref<number | null>(null)
 const newCardLimitDisplay = ref('')
+const savingCard = ref(false)
 
 function handleLimitInput(e: Event) {
   const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '')
@@ -60,6 +67,7 @@ function handleLimitInput(e: Event) {
 }
 
 async function loadData() {
+  loading.value = true
   const [accs, cds, banks] = await Promise.all([
     api.get<Account[]>('/accounts'),
     api.get<CreditCard[]>('/credit-cards'),
@@ -70,17 +78,19 @@ async function loadData() {
   bankOptions.value = banks.map(b => ({
     label: b.code ? `${b.code} – ${b.full_name}` : b.full_name,
     value: b.ispb,
-    bankName: b.full_name,
     bankIspb: b.ispb,
   }))
   accountOptions.value = accs.map(a => ({ label: a.name, value: a.id }))
+  loading.value = false
 }
 
 async function addAccount() {
   if (!selectedBank.value) return
+  savingAccount.value = true
   await api.post('/accounts', { bank_ispb: selectedBank.value.bankIspb })
   selectedBank.value = undefined
   await loadData()
+  savingAccount.value = false
 }
 
 async function deleteAccount(id: string) {
@@ -90,6 +100,7 @@ async function deleteAccount(id: string) {
 
 async function addCard() {
   if (!newCard.value.trim()) return
+  savingCard.value = true
   await api.post('/credit-cards', {
     name: newCard.value.trim(),
     account_id: selectedCardAccount.value?.value ?? null,
@@ -104,6 +115,7 @@ async function addCard() {
   newCardLimit.value = null
   newCardLimitDisplay.value = ''
   await loadData()
+  savingCard.value = false
 }
 
 async function deleteCard(id: string) {
@@ -121,124 +133,203 @@ onMounted(loadData)
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-white mb-6">Contas e Cartões</h1>
+    <div class="mb-8">
+      <h1 class="text-xl font-semibold text-white tracking-tight">Contas e Cartões</h1>
+      <p class="text-sm text-gray-500 mt-1">Gerencie suas contas bancárias e cartões de crédito</p>
+    </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- Accounts -->
-      <UCard>
-        <template #header>
-          <h2 class="font-semibold text-white">Contas Bancárias</h2>
-        </template>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
 
-        <form class="flex gap-3 mb-4" @submit.prevent="addAccount">
+      <!-- ── Row 1: Headers ── -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Contas Bancárias</h2>
+        <span class="text-xs text-gray-600 tabular-nums">{{ accounts.length }} conta{{ accounts.length !== 1 ? 's' : '' }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Cartões de Crédito</h2>
+        <span class="text-xs text-gray-600 tabular-nums">{{ cards.length }} cartão{{ cards.length !== 1 ? 'ões' : '' }}</span>
+      </div>
+
+      <!-- ── Row 2: Forms (mesmo grid row = mesma altura) ── -->
+
+      <!-- Add account form -->
+      <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-1.5">
+        <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Banco</label>
+        <form class="flex gap-2" @submit.prevent="addAccount">
           <USelectMenu
             v-model="selectedBank"
             :items="bankOptions"
-            placeholder="Buscar banco..."
+            placeholder="Buscar banco pelo nome ou código..."
             searchable
-            search-placeholder="Nome ou código..."
-            class="flex-1"
+            search-placeholder="Ex: Bradesco, 237..."
+            class="flex-1 min-w-0"
           />
-          <UButton type="submit" icon="i-heroicons-plus" :disabled="!selectedBank">
-            Adicionar
-          </UButton>
+          <UButton
+            type="submit"
+            icon="i-heroicons-plus"
+            :loading="savingAccount"
+            :disabled="!selectedBank || savingAccount"
+            class="shrink-0"
+          />
         </form>
+      </div>
 
-        <div class="divide-y divide-gray-800">
-          <div
-            v-for="account in accounts"
-            :key="account.id"
-            class="flex items-center justify-between py-3"
-          >
-            <div class="flex flex-col">
-              <span class="text-white text-sm font-medium">{{ account.name }}</span>
-              <span v-if="account.bank?.code" class="text-gray-400 text-xs">
-                Código {{ account.bank.code }}
-              </span>
-            </div>
+      <!-- Add card form -->
+      <div class="rounded-xl border border-white/8 bg-white/[0.03] p-4 flex flex-col gap-4">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Nome do cartão</label>
+          <div class="flex gap-2">
+            <UInput v-model="newCard" placeholder="Ex: Nubank, Itaú Gold..." class="flex-1 min-w-0" />
             <UButton
-              variant="ghost"
-              color="error"
-              icon="i-heroicons-trash"
-              size="xs"
-              @click="deleteAccount(account.id)"
+              type="button"
+              icon="i-heroicons-plus"
+              :loading="savingCard"
+              :disabled="!newCard.trim() || savingCard"
+              class="shrink-0"
+              @click="addCard"
             />
           </div>
         </div>
-      </UCard>
-
-      <!-- Credit Cards -->
-      <UCard>
-        <template #header>
-          <h2 class="font-semibold text-white">Cartões de Crédito</h2>
-        </template>
-
-        <form class="flex flex-col gap-2 mb-4" @submit.prevent="addCard">
-          <div class="flex gap-3">
-            <UInput v-model="newCard" placeholder="Nome do cartão" class="flex-1" />
-            <UButton type="submit" icon="i-heroicons-plus" :disabled="!newCard.trim()">
-              Adicionar
-            </UButton>
-          </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+            Conta vinculada <span class="normal-case font-normal text-gray-600">(opcional)</span>
+          </label>
           <USelectMenu
             v-model="selectedCardAccount"
             :items="accountOptions"
-            placeholder="Vincular a uma conta (opcional)"
+            placeholder="Selecionar conta..."
             class="w-full"
           />
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Ciclo de cobrança</label>
           <div class="grid grid-cols-3 gap-2">
-            <UInput
-              v-model.number="newCardClosingDay"
-              type="number"
-              placeholder="Dia fechamento"
-              :min="1"
-              :max="31"
-            />
-            <UInput
-              v-model.number="newCardDueDay"
-              type="number"
-              placeholder="Dia vencimento"
-              :min="1"
-              :max="31"
-            />
-            <UInput
-              :value="newCardLimitDisplay"
-              type="text"
-              placeholder="Limite (R$)"
-              inputmode="numeric"
-              @input="handleLimitInput"
-            />
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-gray-600">Fechamento</span>
+              <UInput v-model.number="newCardClosingDay" type="number" placeholder="Dia" :min="1" :max="31" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-gray-600">Vencimento</span>
+              <UInput v-model.number="newCardDueDay" type="number" placeholder="Dia" :min="1" :max="31" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <span class="text-xs text-gray-600">Limite</span>
+              <UInput :value="newCardLimitDisplay" type="text" placeholder="R$ 0,00" inputmode="numeric" @input="handleLimitInput" />
+            </div>
           </div>
-        </form>
+        </div>
+      </div>
 
-        <div class="divide-y divide-gray-800">
+      <!-- ── Row 3: Lists (mesmo grid row = topo alinhado) ── -->
+
+      <!-- Accounts list -->
+      <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div v-if="loading" class="divide-y divide-white/5">
+          <div v-for="i in 2" :key="i" class="flex items-center gap-3 px-4 py-3">
+            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="flex flex-col gap-1.5 flex-1">
+              <div class="h-3 w-40 bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-16 bg-white/5 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <template v-else-if="accounts.length === 0">
+          <div class="flex flex-col items-center justify-center py-10 px-6 text-center">
+            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+              <UIcon name="i-heroicons-building-library" class="text-gray-600 text-lg" />
+            </div>
+            <p class="text-sm text-gray-500">Nenhuma conta cadastrada</p>
+            <p class="text-xs text-gray-600 mt-1">Selecione um banco acima para começar</p>
+          </div>
+        </template>
+        <template v-else>
           <div
-            v-for="card in cards"
-            :key="card.id"
-            class="flex items-center justify-between py-3"
+            v-for="account in accounts"
+            :key="account.id"
+            class="group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
           >
-            <div class="flex flex-col">
-              <span class="text-white text-sm font-medium">{{ card.name }}</span>
-              <span class="text-gray-400 text-xs">
-                <span v-if="accountNameForCard(card)">{{ accountNameForCard(card) }}</span>
-                <span v-if="accountNameForCard(card) && (card.due_day || card.limit)"> · </span>
-                <span v-if="card.due_day">Venc. dia {{ card.due_day }}</span>
-                <span v-if="card.due_day && card.closing_day"> · </span>
-                <span v-if="card.closing_day">Fech. dia {{ card.closing_day }}</span>
-                <span v-if="(card.due_day || card.closing_day) && card.limit"> · </span>
-                <span v-if="card.limit">Limite {{ useCurrency().format(card.limit) }}</span>
-              </span>
+            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <UIcon name="i-heroicons-building-library" class="text-gray-400 text-sm" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-white truncate">{{ account.name }}</p>
+              <p v-if="account.bank?.code" class="text-xs text-gray-500">
+                Código {{ account.bank.code }} · ISPB {{ account.bank_ispb }}
+              </p>
             </div>
             <UButton
               variant="ghost"
               color="error"
               icon="i-heroicons-trash"
               size="xs"
+              class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              @click="deleteAccount(account.id)"
+            />
+          </div>
+        </template>
+      </div>
+
+      <!-- Cards list -->
+      <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div v-if="loading" class="divide-y divide-white/5">
+          <div v-for="i in 2" :key="i" class="flex items-center gap-3 px-4 py-3">
+            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="flex flex-col gap-1.5 flex-1">
+              <div class="h-3 w-32 bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-48 bg-white/5 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <template v-else-if="cards.length === 0">
+          <div class="flex flex-col items-center justify-center py-10 px-6 text-center">
+            <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+              <UIcon name="i-heroicons-credit-card" class="text-gray-600 text-lg" />
+            </div>
+            <p class="text-sm text-gray-500">Nenhum cartão cadastrado</p>
+            <p class="text-xs text-gray-600 mt-1">Preencha o formulário acima para adicionar</p>
+          </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="card in cards"
+            :key="card.id"
+            class="group flex items-center gap-3 px-4 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+          >
+            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+              <UIcon name="i-heroicons-credit-card" class="text-gray-400 text-sm" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-sm font-medium text-white">{{ card.name }}</p>
+                <span
+                  v-if="accountNameForCard(card)"
+                  class="text-xs text-gray-500 bg-white/5 px-1.5 py-0.5 rounded truncate max-w-[120px]"
+                >{{ accountNameForCard(card) }}</span>
+              </div>
+              <div class="flex items-center gap-3 mt-0.5">
+                <span v-if="card.closing_day" class="text-xs text-gray-500">
+                  Fech. <span class="text-gray-400 tabular-nums">{{ card.closing_day }}</span>
+                </span>
+                <span v-if="card.due_day" class="text-xs text-gray-500">
+                  Venc. <span class="text-gray-400 tabular-nums">{{ card.due_day }}</span>
+                </span>
+                <span v-if="card.limit" class="text-xs text-gray-400 tabular-nums font-medium">
+                  {{ formatCurrency(card.limit) }}
+                </span>
+              </div>
+            </div>
+            <UButton
+              variant="ghost"
+              color="error"
+              icon="i-heroicons-trash"
+              size="xs"
+              class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               @click="deleteCard(card.id)"
             />
           </div>
-        </div>
-      </UCard>
+        </template>
+      </div>
+
     </div>
   </div>
 </template>
