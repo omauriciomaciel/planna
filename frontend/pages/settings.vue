@@ -39,54 +39,151 @@ onMounted(loadSettings)
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-white mb-6">Configurações</h1>
+    <div class="mb-8">
+      <h1 class="text-xl font-semibold text-white/90 tracking-tight">Configurações</h1>
+      <p class="text-sm text-gray-500 mt-1">Preferências de comportamento e notificações</p>
+    </div>
 
-    <UCard v-if="settings">
-      <form class="space-y-6" @submit.prevent="saveSettings">
-        <div class="space-y-4">
-          <h3 class="text-lg font-medium text-white">Categorização</h3>
-          <UCheckbox v-model="settings.auto_categorize" label="Categorização automática (KMeans)" />
+    <!-- Loading skeleton -->
+    <div v-if="!settings" class="max-w-2xl mx-auto space-y-6">
+      <div class="rounded-xl border border-white/8 overflow-hidden">
+        <div v-for="i in 3" :key="i" class="flex items-center justify-between px-4 py-4 border-b border-white/5 last:border-0">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-white/5 animate-pulse shrink-0" />
+            <div class="space-y-1.5">
+              <div class="h-3 w-40 bg-white/5 rounded animate-pulse" />
+              <div class="h-2.5 w-56 bg-white/5 rounded animate-pulse" />
+            </div>
+          </div>
+          <div class="w-10 h-5 bg-white/5 rounded-full animate-pulse shrink-0" />
         </div>
+      </div>
+    </div>
 
-        <USeparator />
+    <form v-else class="max-w-2xl mx-auto space-y-6" @submit.prevent="saveSettings">
 
-        <div class="space-y-4">
-          <h3 class="text-lg font-medium text-white">Notificações por Email</h3>
+      <!-- Categorização -->
+      <div>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Categorização</h2>
+        <div class="rounded-xl border border-white/8 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-4">
+            <div class="flex items-center gap-3">
+              <div
+                class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style="background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.15)"
+              >
+                <UIcon name="i-heroicons-sparkles" class="text-emerald-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Categorização automática</p>
+                <p class="text-xs text-gray-500 mt-0.5">Sugere categorias via KMeans baseado no seu histórico de gastos</p>
+              </div>
+            </div>
+            <USwitch v-model="settings.auto_categorize" />
+          </div>
+        </div>
+      </div>
 
-          <div class="flex items-center gap-4">
-            <UCheckbox v-model="settings.notify_due_expenses" label="Despesas vencendo em" />
-            <UInput
-              v-model.number="settings.due_days_ahead"
-              type="number"
-              class="w-20"
-              :min="1"
-              :max="30"
-            />
-            <span class="text-gray-400">dias</span>
+      <!-- Notificações por Email -->
+      <div>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Notificações por Email</h2>
+        <div class="rounded-xl border border-white/8 overflow-hidden">
+
+          <!-- Despesas a vencer -->
+          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-clock" class="text-gray-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Despesas a vencer</p>
+                <p class="text-xs text-gray-500 mt-0.5">Avisa com antecedência antes do vencimento</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <div class="flex items-center gap-1.5">
+                <UInput
+                  v-model.number="settings.due_days_ahead"
+                  type="number"
+                  :min="1"
+                  :max="30"
+                  class="w-14"
+                />
+                <span class="text-xs text-gray-600">dias</span>
+              </div>
+              <USwitch v-model="settings.notify_due_expenses" />
+            </div>
           </div>
 
-          <UCheckbox v-model="settings.notify_overdue_expenses" label="Despesas vencidas" />
-          <UCheckbox
-            v-model="settings.notify_abnormal_expenses"
-            label="Despesas acima do normal (IQR)"
-          />
-          <UCheckbox v-model="settings.notify_monthly_closing" label="Fechamento mensal" />
+          <!-- Despesas vencidas -->
+          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-exclamation-circle" class="text-gray-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Despesas vencidas</p>
+                <p class="text-xs text-gray-500 mt-0.5">Lembrete de lançamentos que passaram da data de vencimento</p>
+              </div>
+            </div>
+            <USwitch v-model="settings.notify_overdue_expenses" />
+          </div>
+
+          <!-- Despesas acima do normal -->
+          <div class="flex items-center justify-between px-4 py-4 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-arrow-trending-up" class="text-gray-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Despesas acima do normal</p>
+                <p class="text-xs text-gray-500 mt-0.5">Detecta gastos fora do padrão pelo método IQR</p>
+              </div>
+            </div>
+            <USwitch v-model="settings.notify_abnormal_expenses" />
+          </div>
+
+          <!-- Fechamento mensal -->
+          <div class="flex items-center justify-between px-4 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-calendar-days" class="text-gray-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Fechamento mensal</p>
+                <p class="text-xs text-gray-500 mt-0.5">Resumo automático de receitas e despesas ao fim de cada mês</p>
+              </div>
+            </div>
+            <USwitch v-model="settings.notify_monthly_closing" />
+          </div>
+
         </div>
+      </div>
 
-        <USeparator />
-
-        <div class="space-y-4">
-          <h3 class="text-lg font-medium text-white">Visualização</h3>
-          <UCheckbox
-            v-model="settings.ignore_invoice_payment"
-            label="Ignorar pagamento de fatura no Sankey"
-          />
+      <!-- Visualização -->
+      <div>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Visualização</h2>
+        <div class="rounded-xl border border-white/8 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                <UIcon name="i-heroicons-eye-slash" class="text-gray-400 text-sm" />
+              </div>
+              <div>
+                <p class="text-sm font-medium text-white/80">Ignorar pagamento de fatura</p>
+                <p class="text-xs text-gray-500 mt-0.5">Oculta transferências de fatura no gráfico Sankey</p>
+              </div>
+            </div>
+            <USwitch v-model="settings.ignore_invoice_payment" />
+          </div>
         </div>
+      </div>
 
-        <UButton type="submit" :loading="saving" block>
-          Salvar configurações
-        </UButton>
-      </form>
-    </UCard>
+      <!-- Save -->
+      <UButton type="submit" :loading="saving" block>
+        Salvar configurações
+      </UButton>
+
+    </form>
   </div>
 </template>
