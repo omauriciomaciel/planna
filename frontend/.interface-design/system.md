@@ -220,3 +220,143 @@ Conjunto: `i-heroicons-*` exclusivamente.
 | Cartão de crédito | `i-heroicons-credit-card` |
 | Adicionar | `i-heroicons-plus` |
 | Excluir | `i-heroicons-trash` |
+| Editar | `i-heroicons-pencil-square` |
+| Lançamento | `i-heroicons-banknotes` |
+| Categoria | `i-heroicons-tag` |
+
+---
+
+## Semantic Colors
+
+| Significado | Cor |
+|---|---|
+| Entrada / saldo positivo | `text-emerald-400` |
+| Saída / saldo negativo / expense | `text-red-400` |
+| Crédito / parcelas / cartão | `text-violet-400`, `bg-violet-500/10` |
+| Status pago | `UBadge color="success" variant="subtle"` |
+| Status pendente | `UBadge color="warning" variant="subtle"` |
+
+Nunca usar violet para income/expense. Nunca usar emerald/red para crédito.
+
+---
+
+## List Table Pattern (páginas densas)
+
+Para listas com múltiplas colunas (lançamentos, crédito):
+
+```html
+<!-- Cabeçalho de colunas -->
+<div class="flex items-center gap-4 px-4 py-2 border-b border-white/5 bg-white/[0.015]">
+  <span class="text-xs font-medium text-gray-600 w-14 shrink-0">Data</span>
+  <span class="text-xs font-medium text-gray-600 flex-1">Descrição</span>
+  <span class="text-xs font-medium text-gray-600 w-24 text-right shrink-0">Valor</span>
+  <span class="w-16 shrink-0" /> <!-- espaço para ações -->
+</div>
+
+<!-- Linha -->
+<div class="group flex items-center gap-4 px-4 py-3
+            border-b border-white/5 last:border-0 transition-colors
+            hover:bg-white/[0.02]">
+  <span class="text-xs text-gray-500 tabular-nums w-14 shrink-0">01/03</span>
+  <span class="flex-1 text-sm text-white/80 truncate min-w-0">Descrição</span>
+  <span class="text-sm font-medium tabular-nums text-red-400 w-24 text-right shrink-0">
+    −R$ 150,00
+  </span>
+  <div class="w-16 shrink-0 flex items-center justify-end gap-1">
+    <UButton ... class="opacity-0 group-hover:opacity-100 transition-opacity" />
+    <UButton ... class="opacity-0 group-hover:opacity-100 transition-opacity" />
+  </div>
+</div>
+```
+
+**Colunas responsivas:** colunas secundárias usam `hidden md:block` ou `hidden sm:block`.
+**Ações:** sempre `opacity-0 group-hover:opacity-100`. Edit antes de Delete.
+
+---
+
+## Inline Form Pattern (add/edit na mesma página)
+
+```html
+<div v-if="showForm" class="rounded-xl border border-white/8 bg-white/[0.03] p-5 mb-4">
+  <label class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4 block">
+    Título do formulário
+  </label>
+  <form class="space-y-3" @submit.prevent="save">
+    <!-- campo full-width -->
+    <UInput v-model="name" placeholder="..." class="w-full" />
+    <!-- grid 2 colunas -->
+    <div class="grid grid-cols-2 gap-3">
+      <div class="flex flex-col gap-1.5">
+        <span class="text-xs text-gray-600">Sub-label</span>
+        <UInput ... />
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-xs text-gray-600">Sub-label</span>
+        <UInput ... />
+      </div>
+    </div>
+    <!-- ações -->
+    <div class="flex items-center justify-end gap-2 pt-1">
+      <UButton variant="ghost" color="neutral" @click="cancel">Cancelar</UButton>
+      <UButton type="submit" :loading="saving" :disabled="!valid || saving">
+        Salvar
+      </UButton>
+    </div>
+  </form>
+</div>
+```
+
+---
+
+## Page Header Pattern
+
+```html
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-xl font-semibold text-white/90 tracking-tight">Título</h1>
+    <p class="text-sm text-gray-500 mt-1">N itens · dado contextual</p>
+  </div>
+  <UButton icon="i-heroicons-plus">Ação principal</UButton>
+</div>
+```
+
+---
+
+## Signature Elements por Domínio
+
+### Crédito (`/credit`)
+**Trilha de parcelas** — pontos proporcionais + `X/Y`:
+
+```ts
+function installmentDots(current: number, total: number): boolean[] {
+  const size = Math.min(total, 12)
+  const filled = Math.round((current / total) * size)
+  return Array.from({ length: size }, (_, i) => i < filled)
+}
+```
+
+```html
+<div class="flex flex-col items-center gap-1.5">
+  <div class="flex items-center gap-[3px]">
+    <span v-for="(filled, i) in installmentDots(p.current_installment, p.total_installments)"
+          :key="i" class="w-1 h-1 rounded-full"
+          :class="filled ? 'bg-violet-400' : 'bg-white/15'" />
+  </div>
+  <span class="text-xs text-gray-600 tabular-nums">{{ current }}/{{ total }}</span>
+</div>
+```
+
+### Contas (`/accounts`)
+**Saldo atual** colorido por sinal + saldo inicial muted abaixo:
+
+```html
+<div class="text-right shrink-0 mr-1">
+  <p class="text-sm font-medium tabular-nums"
+     :class="account.current_balance >= 0 ? 'text-emerald-400' : 'text-red-400'">
+    {{ formatCurrency(account.current_balance) }}
+  </p>
+  <p class="text-xs text-gray-600 tabular-nums">
+    inicial {{ formatCurrency(account.initial_balance) }}
+  </p>
+</div>
+```

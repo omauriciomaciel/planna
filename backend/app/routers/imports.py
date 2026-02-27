@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -35,7 +35,7 @@ async def import_ofx(
 @router.post("/ofx/confirm")
 async def confirm_ofx(
     file: UploadFile,
-    account_id: str | None = None,
+    account_id: str | None = Form(None),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -73,8 +73,8 @@ async def import_csv(
 @router.post("/csv/confirm")
 async def confirm_csv(
     file: UploadFile,
-    credit_card_id: str | None = None,
-    file_type: str = "csv",
+    credit_card_id: str | None = Form(None),
+    file_type: str = Form("csv"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
