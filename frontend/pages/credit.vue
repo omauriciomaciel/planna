@@ -27,28 +27,9 @@ interface LookupOption {
   value: string
 }
 
-interface CreditHistoryItem {
-  month: number
-  year: number
-  label: string
-  credit_total: number
-  income: number
-  expenses: number
-  balance: number
-  commitment: number
-  cards: Record<string, number>
-}
-
-interface CreditAnalytics {
-  history: CreditHistoryItem[]
-  cards: string[]
-  current_month: CreditHistoryItem | null
-}
-
 // --- Data ---
 const purchases = ref<CreditPurchase[]>([])
 const loading = ref(true)
-const analytics = ref<CreditAnalytics | null>(null)
 
 const cardOptions = ref<LookupOption[]>([])
 const categoryOptions = ref<LookupOption[]>([])
@@ -72,187 +53,6 @@ const saving = ref(false)
 const totalMonthly = computed(() =>
   purchases.value.reduce((sum, p) => sum + Number(p.installment_amount), 0)
 )
-
-// --- Commitment ring ---
-const commitmentPct = computed(() => (analytics.value?.current_month?.commitment ?? 0) * 100)
-
-const commitmentColor = computed(() => {
-  const r = analytics.value?.current_month?.commitment ?? 0
-  return r < 0.7 ? '#34d399' : r < 0.9 ? '#fbbf24' : '#f87171'
-})
-
-const commitmentStyle = computed(() => ({
-  background: `conic-gradient(from -90deg, ${commitmentColor.value} ${commitmentPct.value}%, ${isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} ${commitmentPct.value}%)`,
-}))
-
-// --- Credit as % of expenses ---
-const creditPctOfExpenses = computed(() => {
-  const cur = analytics.value?.current_month
-  if (!cur) return 0
-  const totalExp = cur.expenses + cur.credit_total
-  if (totalExp === 0) return 0
-  return (cur.credit_total / totalExp) * 100
-})
-
-// --- Charts ---
-const creditChartEl = ref<HTMLElement | null>(null)
-const balanceChartEl = ref<HTMLElement | null>(null)
-let Plotly: any = null
-
-const PLOT_CFG = { displayModeBar: false, responsive: true }
-
-function getBaseLayout() {
-  const dark = isDark.value
-  return {
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: 'transparent',
-    font: {
-      color: dark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)',
-      family: 'inherit',
-      size: 11,
-    },
-    hoverlabel: {
-      bgcolor: dark ? '#1f2937' : '#f9fafb',
-      bordercolor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-      font: { color: dark ? 'rgba(255,255,255,0.9)' : '#111827', size: 12 },
-    },
-  }
-}
-
-// Violet palette for stacked card bars
-const CARD_COLORS = [
-  'rgba(139,92,246,0.7)',   // violet-500
-  'rgba(167,139,250,0.6)',  // violet-400
-  'rgba(196,181,253,0.5)',  // violet-300
-  'rgba(109,40,217,0.6)',   // violet-700
-  'rgba(221,214,254,0.45)', // violet-200
-]
-
-function renderCreditChart() {
-  if (!Plotly || !creditChartEl.value || !analytics.value) return
-  const { history, cards } = analytics.value
-  if (!history.length) return
-
-  const dark = isDark.value
-  const traces = cards.map((cardName, i) => ({
-    name: cardName,
-    type: 'bar' as const,
-    x: history.map(h => h.label),
-    y: history.map(h => h.cards[cardName] ?? 0),
-    marker: { color: CARD_COLORS[i % CARD_COLORS.length] },
-    hovertemplate: `<b>${cardName}</b><br>%{x}: R$ %{y:,.2f}<extra></extra>`,
-  }))
-
-  // If no cards breakdown, show total as single bar
-  if (!cards.length) {
-    traces.push({
-      name: 'Crédito',
-      type: 'bar',
-      x: history.map(h => h.label),
-      y: history.map(h => h.credit_total),
-      marker: { color: CARD_COLORS[0] },
-      hovertemplate: '<b>%{x}</b><br>Crédito: R$ %{y:,.2f}<extra></extra>',
-    })
-  }
-
-  Plotly.react(creditChartEl.value, traces, {
-    ...getBaseLayout(),
-    margin: { t: 8, r: 10, b: 36, l: 60 },
-    barmode: 'stack',
-    bargap: 0.35,
-    xaxis: {
-      gridcolor: 'transparent',
-      linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
-      tickcolor: 'transparent',
-    },
-    yaxis: {
-      gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
-      linecolor: 'transparent',
-      tickcolor: 'transparent',
-      tickprefix: 'R$',
-      tickformat: ',.0f',
-    },
-    legend: {
-      orientation: 'h' as const,
-      x: 0,
-      y: 1.18,
-      font: { color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', size: 11 },
-      bgcolor: 'transparent',
-    },
-    showlegend: cards.length > 1,
-  }, PLOT_CFG)
-}
-
-function renderBalanceChart() {
-  if (!Plotly || !balanceChartEl.value || !analytics.value) return
-  const { history } = analytics.value
-  if (!history.length) return
-
-  const dark = isDark.value
-  Plotly.react(balanceChartEl.value, [
-    {
-      name: 'Receita',
-      type: 'scatter',
-      mode: 'lines+markers',
-      x: history.map(h => h.label),
-      y: history.map(h => h.income),
-      line: { color: 'rgba(52,211,153,0.7)', width: 2 },
-      marker: { size: 5, color: 'rgba(52,211,153,0.9)' },
-      hovertemplate: '<b>%{x}</b><br>Receita: R$ %{y:,.2f}<extra></extra>',
-    },
-    {
-      name: 'Despesas + Crédito',
-      type: 'scatter',
-      mode: 'lines+markers',
-      x: history.map(h => h.label),
-      y: history.map(h => h.expenses + h.credit_total),
-      line: { color: 'rgba(248,113,113,0.7)', width: 2 },
-      marker: { size: 5, color: 'rgba(248,113,113,0.9)' },
-      hovertemplate: '<b>%{x}</b><br>Despesas: R$ %{y:,.2f}<extra></extra>',
-    },
-    {
-      name: 'Saldo',
-      type: 'bar',
-      x: history.map(h => h.label),
-      y: history.map(h => h.balance),
-      marker: {
-        color: history.map(h =>
-          h.balance >= 0 ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'
-        ),
-      },
-      hovertemplate: '<b>%{x}</b><br>Saldo: R$ %{y:,.2f}<extra></extra>',
-    },
-  ], {
-    ...getBaseLayout(),
-    margin: { t: 8, r: 10, b: 36, l: 60 },
-    barmode: 'overlay',
-    bargap: 0.4,
-    xaxis: {
-      gridcolor: 'transparent',
-      linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
-      tickcolor: 'transparent',
-    },
-    yaxis: {
-      gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
-      linecolor: 'transparent',
-      tickcolor: 'transparent',
-      tickprefix: 'R$',
-      tickformat: ',.0f',
-    },
-    legend: {
-      orientation: 'h' as const,
-      x: 0,
-      y: 1.18,
-      font: { color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', size: 11 },
-      bgcolor: 'transparent',
-    },
-  }, PLOT_CFG)
-}
-
-function renderCharts() {
-  renderCreditChart()
-  renderBalanceChart()
-}
 
 // --- Form helpers ---
 function recomputeInstallmentAmount() {
@@ -289,19 +89,6 @@ async function loadPurchases() {
     purchases.value = await api.get<CreditPurchase[]>('/credit-purchases?limit=100')
   } finally {
     loading.value = false
-  }
-}
-
-async function loadAnalytics() {
-  try {
-    const now = new Date()
-    analytics.value = await api.get<CreditAnalytics>(
-      `/analytics/credit?year=${now.getFullYear()}&month=${now.getMonth() + 1}&n=6`
-    )
-    await nextTick()
-    renderCharts()
-  } catch {
-    // analytics is optional — don't block the page
   }
 }
 
@@ -374,7 +161,7 @@ async function savePurchase() {
       await api.post('/credit-purchases', payload)
     }
     cancelForm()
-    await Promise.all([loadPurchases(), loadAnalytics()])
+    await loadPurchases()
   } finally {
     saving.value = false
   }
@@ -382,7 +169,7 @@ async function savePurchase() {
 
 async function deletePurchase(id: string) {
   await api.delete(`/credit-purchases/${id}`)
-  await Promise.all([loadPurchases(), loadAnalytics()])
+  await loadPurchases()
 }
 
 // Delete confirmation
@@ -420,22 +207,10 @@ function installmentDots(current: number, total: number): boolean[] {
   return Array.from({ length: size }, (_, i) => i < filled)
 }
 
-onMounted(async () => {
+onMounted(() => {
   loadPurchases()
   loadLookups()
-  Plotly = (await import('plotly.js-dist-min')).default
-  loadAnalytics()
 })
-
-onUnmounted(() => {
-  if (Plotly) {
-    if (creditChartEl.value) Plotly.purge(creditChartEl.value)
-    if (balanceChartEl.value) Plotly.purge(balanceChartEl.value)
-  }
-})
-
-watch(isDark, renderCharts)
-watch(analytics, () => nextTick(renderCharts))
 </script>
 
 <template>
@@ -457,86 +232,6 @@ watch(analytics, () => nextTick(renderCharts))
       <UButton icon="i-heroicons-plus" @click="cancelForm(); showForm = true">
         Nova compra
       </UButton>
-    </div>
-
-    <!-- Analytics cards -->
-    <div v-if="analytics?.current_month" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <!-- Crédito este mês -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Crédito no mês</p>
-        <p class="text-2xl font-semibold text-violet-600 dark:text-violet-400 tabular-nums leading-none">
-          {{ format(analytics.current_month.credit_total) }}
-        </p>
-        <p class="text-[11px] text-gray-400 dark:text-white/20 mt-2.5 tabular-nums">
-          {{ creditPctOfExpenses.toFixed(0) }}% das despesas totais
-        </p>
-      </div>
-
-      <!-- Saldo -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Saldo</p>
-        <p
-          class="text-2xl font-semibold tabular-nums leading-none"
-          :class="analytics.current_month.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
-        >
-          {{ format(analytics.current_month.balance) }}
-        </p>
-        <p class="text-[11px] text-gray-400 dark:text-white/20 mt-2.5 tabular-nums">
-          receita − despesas − crédito
-        </p>
-      </div>
-
-      <!-- Receita -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Receita</p>
-        <p class="text-2xl font-semibold text-gray-900 dark:text-white/90 tabular-nums leading-none">
-          {{ format(analytics.current_month.income) }}
-        </p>
-        <p class="text-[11px] text-gray-400 dark:text-white/20 mt-2.5">
-          este mês
-        </p>
-      </div>
-
-      <!-- Comprometimento -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5 flex items-center gap-4">
-        <div class="relative shrink-0 w-[52px] h-[52px]">
-          <div class="w-[52px] h-[52px] rounded-full" :style="commitmentStyle">
-            <div class="absolute inset-[6px] rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
-              <span class="text-[11px] font-semibold text-gray-900 dark:text-white/90 tabular-nums">{{ commitmentPct.toFixed(0) }}%</span>
-            </div>
-          </div>
-        </div>
-        <div class="min-w-0">
-          <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-1">Comprometida</p>
-          <p class="text-sm text-gray-500 dark:text-white/55 leading-snug tabular-nums">
-            {{ commitmentPct.toFixed(1) }}% da receita
-          </p>
-          <p class="text-[11px] text-gray-400 dark:text-white/25">despesas + crédito</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Charts row -->
-    <div v-if="analytics" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <!-- Credit spending by card -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
-        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Gastos no crédito</h2>
-        <div ref="creditChartEl" class="h-[226px]">
-          <div v-if="!analytics.history.length" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
-            Sem dados
-          </div>
-        </div>
-      </div>
-
-      <!-- Balance history -->
-      <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
-        <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Saldo mensal</h2>
-        <div ref="balanceChartEl" class="h-[226px]">
-          <div v-if="!analytics.history.length" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
-            Sem dados
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- List -->

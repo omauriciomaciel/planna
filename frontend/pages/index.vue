@@ -46,6 +46,24 @@ interface Outlier {
   actual: number
 }
 
+interface CreditHistoryItem {
+  month: number
+  year: number
+  label: string
+  credit_total: number
+  income: number
+  expenses: number
+  balance: number
+  commitment: number
+  cards: Record<string, number>
+}
+
+interface CreditAnalytics {
+  history: CreditHistoryItem[]
+  cards: string[]
+  current_month: CreditHistoryItem | null
+}
+
 // --- State ---
 const currentDate = ref(new Date())
 const year = computed(() => currentDate.value.getFullYear())
@@ -84,6 +102,12 @@ const { data: sankey } = useAsyncData(
 const { data: outliers } = useAsyncData(
   'dashboard-outliers',
   () => api.get<Outlier[]>(`/analytics/outliers?year=${year.value}&month=${month.value}`),
+  { watch: [year, month] }
+)
+
+const { data: creditAnalytics } = useAsyncData(
+  'dashboard-credit',
+  () => api.get<CreditAnalytics>(`/analytics/credit?year=${year.value}&month=${month.value}&n=6`),
   { watch: [year, month] }
 )
 
@@ -131,12 +155,42 @@ const maxCatPct = computed(() => {
   return cats.length ? Math.max(...cats.map(c => c.pct)) : 1
 })
 
+// --- Credit analytics ---
+const creditCommitmentPct = computed(() => (creditAnalytics.value?.current_month?.commitment ?? 0) * 100)
+
+const creditCommitmentColor = computed(() => {
+  const r = creditAnalytics.value?.current_month?.commitment ?? 0
+  return r < 0.7 ? '#34d399' : r < 0.9 ? '#fbbf24' : '#f87171'
+})
+
+const creditCommitmentStyle = computed(() => ({
+  background: `conic-gradient(from -90deg, ${creditCommitmentColor.value} ${creditCommitmentPct.value}%, ${isDark.value ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} ${creditCommitmentPct.value}%)`,
+}))
+
+const creditPctOfExpenses = computed(() => {
+  const cur = creditAnalytics.value?.current_month
+  if (!cur) return 0
+  const totalExp = cur.expenses + cur.credit_total
+  if (totalExp === 0) return 0
+  return (cur.credit_total / totalExp) * 100
+})
+
 // --- Charts ---
 const chartContainer = ref<HTMLElement | null>(null)
 const sankeyContainer = ref<HTMLElement | null>(null)
+const creditChartEl = ref<HTMLElement | null>(null)
+const balanceChartEl = ref<HTMLElement | null>(null)
 let Plotly: any = null
 
 const PLOT_CFG = { displayModeBar: false, responsive: true }
+
+const CARD_COLORS = [
+  'rgba(139,92,246,0.7)',
+  'rgba(167,139,250,0.6)',
+  'rgba(196,181,253,0.5)',
+  'rgba(109,40,217,0.6)',
+  'rgba(221,214,254,0.45)',
+]
 
 function getBaseLayout() {
   const dark = isDark.value
@@ -262,16 +316,140 @@ function renderSankeyChart() {
   }, PLOT_CFG)
 }
 
+function renderCreditChart() {
+  if (!Plotly || !creditChartEl.value || !creditAnalytics.value) return
+  const { history, cards } = creditAnalytics.value
+  if (!history.length) return
+
+  const dark = isDark.value
+  const traces = cards.map((cardName, i) => ({
+    name: cardName,
+    type: 'bar' as const,
+    x: history.map(h => h.label),
+    y: history.map(h => h.cards[cardName] ?? 0),
+    marker: { color: CARD_COLORS[i % CARD_COLORS.length] },
+    hovertemplate: `<b>${cardName}</b><br>%{x}: R$ %{y:,.2f}<extra></extra>`,
+  }))
+
+  if (!cards.length) {
+    traces.push({
+      name: 'Crédito',
+      type: 'bar',
+      x: history.map(h => h.label),
+      y: history.map(h => h.credit_total),
+      marker: { color: CARD_COLORS[0] },
+      hovertemplate: '<b>%{x}</b><br>Crédito: R$ %{y:,.2f}<extra></extra>',
+    })
+  }
+
+  Plotly.react(creditChartEl.value, traces, {
+    ...getBaseLayout(),
+    margin: { t: 8, r: 10, b: 36, l: 60 },
+    barmode: 'stack',
+    bargap: 0.35,
+    xaxis: {
+      gridcolor: 'transparent',
+      linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
+      tickcolor: 'transparent',
+    },
+    yaxis: {
+      gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
+      linecolor: 'transparent',
+      tickcolor: 'transparent',
+      tickprefix: 'R$',
+      tickformat: ',.0f',
+    },
+    legend: {
+      orientation: 'h' as const,
+      x: 0,
+      y: 1.18,
+      font: { color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', size: 11 },
+      bgcolor: 'transparent',
+    },
+    showlegend: cards.length > 1,
+  }, PLOT_CFG)
+}
+
+function renderBalanceChart() {
+  if (!Plotly || !balanceChartEl.value || !creditAnalytics.value) return
+  const { history } = creditAnalytics.value
+  if (!history.length) return
+
+  const dark = isDark.value
+  Plotly.react(balanceChartEl.value, [
+    {
+      name: 'Receita',
+      type: 'scatter',
+      mode: 'lines+markers',
+      x: history.map(h => h.label),
+      y: history.map(h => h.income),
+      line: { color: 'rgba(52,211,153,0.7)', width: 2 },
+      marker: { size: 5, color: 'rgba(52,211,153,0.9)' },
+      hovertemplate: '<b>%{x}</b><br>Receita: R$ %{y:,.2f}<extra></extra>',
+    },
+    {
+      name: 'Despesas + Crédito',
+      type: 'scatter',
+      mode: 'lines+markers',
+      x: history.map(h => h.label),
+      y: history.map(h => h.expenses + h.credit_total),
+      line: { color: 'rgba(248,113,113,0.7)', width: 2 },
+      marker: { size: 5, color: 'rgba(248,113,113,0.9)' },
+      hovertemplate: '<b>%{x}</b><br>Despesas: R$ %{y:,.2f}<extra></extra>',
+    },
+    {
+      name: 'Saldo',
+      type: 'bar',
+      x: history.map(h => h.label),
+      y: history.map(h => h.balance),
+      marker: {
+        color: history.map(h =>
+          h.balance >= 0 ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'
+        ),
+      },
+      hovertemplate: '<b>%{x}</b><br>Saldo: R$ %{y:,.2f}<extra></extra>',
+    },
+  ], {
+    ...getBaseLayout(),
+    margin: { t: 8, r: 10, b: 36, l: 60 },
+    barmode: 'overlay',
+    bargap: 0.4,
+    xaxis: {
+      gridcolor: 'transparent',
+      linecolor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
+      tickcolor: 'transparent',
+    },
+    yaxis: {
+      gridcolor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)',
+      linecolor: 'transparent',
+      tickcolor: 'transparent',
+      tickprefix: 'R$',
+      tickformat: ',.0f',
+    },
+    legend: {
+      orientation: 'h' as const,
+      x: 0,
+      y: 1.18,
+      font: { color: dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', size: 11 },
+      bgcolor: 'transparent',
+    },
+  }, PLOT_CFG)
+}
+
 onMounted(async () => {
   Plotly = (await import('plotly.js-dist-min')).default
   renderHistoryChart()
   renderSankeyChart()
+  renderCreditChart()
+  renderBalanceChart()
 })
 
 onUnmounted(() => {
   if (Plotly) {
     if (chartContainer.value) Plotly.purge(chartContainer.value)
     if (sankeyContainer.value) Plotly.purge(sankeyContainer.value)
+    if (creditChartEl.value) Plotly.purge(creditChartEl.value)
+    if (balanceChartEl.value) Plotly.purge(balanceChartEl.value)
   }
 })
 
@@ -280,6 +458,14 @@ watch(sankey, renderSankeyChart)
 watch(isDark, () => {
   renderHistoryChart()
   renderSankeyChart()
+  renderCreditChart()
+  renderBalanceChart()
+})
+
+watch(creditAnalytics, async () => {
+  await nextTick()
+  renderCreditChart()
+  renderBalanceChart()
 })
 
 function changeMonth(delta: number) {
@@ -432,6 +618,67 @@ function changeMonth(delta: number) {
         </div>
       </div>
     </div>
+
+    <!-- Credit Analytics -->
+    <template v-if="creditAnalytics">
+      <!-- Section divider -->
+      <div class="flex items-center gap-3">
+        <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/25">Crédito</span>
+        <div class="flex-1 h-px bg-black/5 dark:bg-white/5" />
+      </div>
+
+      <!-- Credit KPI cards -->
+      <div v-if="creditAnalytics.current_month" class="grid grid-cols-2 gap-3">
+        <!-- Crédito no mês -->
+        <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5">
+          <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-3">Crédito no mês</p>
+          <p class="text-2xl font-semibold text-violet-600 dark:text-violet-400 tabular-nums leading-none">
+            {{ format(creditAnalytics.current_month.credit_total) }}
+          </p>
+          <p class="text-[11px] text-gray-400 dark:text-white/20 mt-2.5 tabular-nums">
+            {{ creditPctOfExpenses.toFixed(0) }}% das despesas totais
+          </p>
+        </div>
+
+        <!-- Comprometimento total (despesas + crédito / receita) -->
+        <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-4 lg:p-5 flex items-center gap-4">
+          <div class="relative shrink-0 w-[52px] h-[52px]">
+            <div class="w-[52px] h-[52px] rounded-full" :style="creditCommitmentStyle">
+              <div class="absolute inset-[6px] rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
+                <span class="text-[11px] font-semibold text-gray-900 dark:text-white/90 tabular-nums">{{ creditCommitmentPct.toFixed(0) }}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="min-w-0">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-1">Comprometimento total</p>
+            <p class="text-sm text-gray-500 dark:text-white/55 leading-snug tabular-nums">
+              {{ creditCommitmentPct.toFixed(1) }}% da receita
+            </p>
+            <p class="text-[11px] text-gray-400 dark:text-white/25">despesas + crédito</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credit charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+          <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Gastos no crédito</h2>
+          <div ref="creditChartEl" class="h-[226px]">
+            <div v-if="!creditAnalytics.history.length" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
+              Sem dados
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-black/5 dark:border-white/5 bg-white dark:bg-gray-900 p-5">
+          <h2 class="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-white/30 mb-4">Saldo mensal</h2>
+          <div ref="balanceChartEl" class="h-[226px]">
+            <div v-if="!creditAnalytics.history.length" class="h-full flex items-center justify-center text-sm text-gray-400 dark:text-white/20">
+              Sem dados
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Outliers -->
     <div
