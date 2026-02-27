@@ -104,6 +104,9 @@ async def create_credit_card(
         user_id=user.id,
         name=data.name,
         account_id=uuid.UUID(data.account_id) if data.account_id else None,
+        due_day=data.due_day,
+        closing_day=data.closing_day,
+        limit=data.limit,
     )
     db.add(card)
     await db.commit()

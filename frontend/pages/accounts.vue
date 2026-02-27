@@ -21,6 +21,9 @@ interface CreditCard {
   id: string
   name: string
   account_id: string | null
+  due_day: number | null
+  closing_day: number | null
+  limit: number | null
 }
 
 interface BankOption {
@@ -42,6 +45,19 @@ const accountOptions = ref<AccountOption[]>([])
 const selectedBank = ref<BankOption | undefined>(undefined)
 const newCard = ref('')
 const selectedCardAccount = ref<AccountOption | undefined>(undefined)
+const newCardDueDay = ref<number | null>(null)
+const newCardClosingDay = ref<number | null>(null)
+const newCardLimit = ref<number | null>(null)
+const newCardLimitDisplay = ref('')
+
+function handleLimitInput(e: Event) {
+  const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '')
+  const cents = parseInt(digits || '0', 10)
+  newCardLimit.value = cents > 0 ? cents / 100 : null
+  newCardLimitDisplay.value = cents > 0
+    ? (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : ''
+}
 
 async function loadData() {
   const [accs, cds, banks] = await Promise.all([
@@ -77,9 +93,16 @@ async function addCard() {
   await api.post('/credit-cards', {
     name: newCard.value.trim(),
     account_id: selectedCardAccount.value?.value ?? null,
+    due_day: newCardDueDay.value,
+    closing_day: newCardClosingDay.value,
+    limit: newCardLimit.value,
   })
   newCard.value = ''
   selectedCardAccount.value = undefined
+  newCardDueDay.value = null
+  newCardClosingDay.value = null
+  newCardLimit.value = null
+  newCardLimitDisplay.value = ''
   await loadData()
 }
 
@@ -163,6 +186,29 @@ onMounted(loadData)
             placeholder="Vincular a uma conta (opcional)"
             class="w-full"
           />
+          <div class="grid grid-cols-3 gap-2">
+            <UInput
+              v-model.number="newCardClosingDay"
+              type="number"
+              placeholder="Dia fechamento"
+              :min="1"
+              :max="31"
+            />
+            <UInput
+              v-model.number="newCardDueDay"
+              type="number"
+              placeholder="Dia vencimento"
+              :min="1"
+              :max="31"
+            />
+            <UInput
+              :value="newCardLimitDisplay"
+              type="text"
+              placeholder="Limite (R$)"
+              inputmode="numeric"
+              @input="handleLimitInput"
+            />
+          </div>
         </form>
 
         <div class="divide-y divide-gray-800">
@@ -173,8 +219,14 @@ onMounted(loadData)
           >
             <div class="flex flex-col">
               <span class="text-white text-sm font-medium">{{ card.name }}</span>
-              <span v-if="accountNameForCard(card)" class="text-gray-400 text-xs">
-                {{ accountNameForCard(card) }}
+              <span class="text-gray-400 text-xs">
+                <span v-if="accountNameForCard(card)">{{ accountNameForCard(card) }}</span>
+                <span v-if="accountNameForCard(card) && (card.due_day || card.limit)"> · </span>
+                <span v-if="card.due_day">Venc. dia {{ card.due_day }}</span>
+                <span v-if="card.due_day && card.closing_day"> · </span>
+                <span v-if="card.closing_day">Fech. dia {{ card.closing_day }}</span>
+                <span v-if="(card.due_day || card.closing_day) && card.limit"> · </span>
+                <span v-if="card.limit">Limite {{ useCurrency().format(card.limit) }}</span>
               </span>
             </div>
             <UButton

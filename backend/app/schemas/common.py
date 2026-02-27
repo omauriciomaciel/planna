@@ -1,6 +1,7 @@
 import uuid
+from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class NamedItemCreate(BaseModel):
@@ -63,12 +64,18 @@ class AccountResponse(BaseModel):
 class CreditCardCreate(BaseModel):
     name: str
     account_id: str | None = None
+    due_day: int | None = Field(None, ge=1, le=31)
+    closing_day: int | None = Field(None, ge=1, le=31)
+    limit: Decimal | None = Field(None, ge=0)
 
 
 class CreditCardResponse(BaseModel):
     id: uuid.UUID
     name: str
     account_id: uuid.UUID | None
+    due_day: int | None
+    closing_day: int | None
+    limit: Decimal | None
 
     model_config = {"from_attributes": True}
 

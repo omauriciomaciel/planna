@@ -1,6 +1,7 @@
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +21,9 @@ class CreditCard(Base, UUIDMixin, TimestampMixin):
         nullable=True,
         index=True,
     )
+    due_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    closing_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    limit: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
 
     user = relationship("User", back_populates="credit_cards")
     account = relationship("Account", back_populates="credit_cards")
