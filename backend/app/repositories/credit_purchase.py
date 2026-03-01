@@ -67,6 +67,7 @@ class CreditPurchaseRepository(BaseRepository[CreditPurchase]):
             purchase = CreditPurchase(
                 user_id=user_id,
                 purchase_date=item["purchase_date"],
+                due_date=item.get("due_date", item["purchase_date"]),
                 credit_card_id=credit_card_id,
                 merchant=item["merchant"],
                 total_amount=item["total_amount"],
