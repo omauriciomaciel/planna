@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
   Landmark,
   LogOut,
   RefreshCw,
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -23,6 +26,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { InvoiceCapture, InvoiceIngestResult } from "@/components/invoice-capture";
 
 const PluggyConnect = dynamic(
   () => import("react-pluggy-connect").then((module) => module.PluggyConnect),
@@ -65,12 +69,21 @@ type Transaction = {
   source: string;
   category_id: string | null;
   category_name: string | null;
-  account_id: string;
+  account_id: string | null;
   account_name: string;
   member_id: string;
   member_name: string;
   installment_current: number | null;
   installment_total: number | null;
+  invoice_id: string | null;
+  invoice_items: {
+    id: string;
+    description: string;
+    quantity: string;
+    unit: string | null;
+    unit_price: string;
+    total_price: string;
+  }[];
 };
 type TransactionPage = { items: Transaction[]; next_cursor: string | null };
 type Preset = "month" | "quarter" | "year" | "custom";
@@ -95,7 +108,16 @@ function presetDates(preset: Preset) {
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "include", ...init });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) {
+    const body = await response.text();
+    try {
+      const detail = JSON.parse(body).detail;
+      throw new Error(typeof detail === "string" ? detail : detail?.[0]?.msg || "Não foi possível concluir a solicitação.");
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error("Não foi possível concluir a solicitação.");
+      throw error;
+    }
+  }
   return response.json();
 }
 
@@ -217,6 +239,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [connectToken, setConnectToken] = useState("");
+  const [expandedTransaction, setExpandedTransaction] = useState("");
 
   const transactionParams = useMemo(() => ({
     date_from: from,
@@ -319,6 +342,16 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     setNextCursor(page.next_cursor);
   }
 
+  async function ingestInvoice(url: string): Promise<InvoiceIngestResult> {
+    const result = await json<InvoiceIngestResult>("/api/invoices/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    await load();
+    return result;
+  }
+
   async function changeCategory(transactionId: string, categoryId: string) {
     try {
       await json(`/api/transactions/${transactionId}/category`, {
@@ -388,6 +421,8 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
 
       {error && <p aria-live="polite" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
+      <InvoiceCapture onIngest={ingestInvoice} />
+
       {loading || !kpis ? (
         <Card><CardHeader><CardTitle>Organizando seus números…</CardTitle><CardDescription>Receitas, despesas e contas estão sendo consolidadas.</CardDescription></CardHeader></Card>
       ) : <>
@@ -424,16 +459,52 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-3xl border-collapse text-left text-sm">
                   <thead><tr className="border-b text-xs text-muted-foreground"><th className="px-3 py-3 font-medium">Data</th><th className="px-3 py-3 font-medium">Movimentação</th><th className="px-3 py-3 font-medium">Categoria</th><th className="px-3 py-3 font-medium">Conta</th><th className="px-3 py-3 font-medium">Membro</th><th className="px-3 py-3 text-right font-medium">Valor</th></tr></thead>
-                  <tbody>{transactions.map((item) => (
-                    <tr className="border-b border-border/60 last:border-0" key={item.id}>
+                  <tbody>{transactions.map((item) => {
+                    const expanded = expandedTransaction === item.id;
+                    return (
+                    <Fragment key={item.id}>
+                    <tr className="border-b border-border/60">
                       <td className="whitespace-nowrap px-3 py-4 text-muted-foreground">{shortDate.format(new Date(item.date))}</td>
-                      <td className="max-w-60 px-3 py-4"><p className="truncate font-medium">{item.merchant_name || item.description}</p><p className="truncate text-xs text-muted-foreground">{item.installment_total ? `${item.installment_current}/${item.installment_total} · ` : ""}{item.status === "pending" ? "Pendente" : item.description}</p></td>
+                      <td className="max-w-60 px-3 py-2">
+                        <button
+                          aria-expanded={item.invoice_id ? expanded : undefined}
+                          className="flex min-h-11 w-full items-center gap-2 text-left"
+                          disabled={!item.invoice_id}
+                          onClick={() => item.invoice_id && setExpandedTransaction(expanded ? "" : item.id)}
+                          type="button"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="truncate font-medium">{item.merchant_name || item.description}</span>
+                              {item.source === "voucher" && <Badge variant="secondary">Vale-alimentação</Badge>}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">{item.installment_total ? `${item.installment_current}/${item.installment_total} · ` : ""}{item.status === "pending" ? "Pendente" : item.description}</span>
+                          </span>
+                          {item.invoice_id && (expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />)}
+                        </button>
+                      </td>
                       <td className="px-3 py-4"><select aria-label={`Categoria de ${item.description}`} className="h-9 max-w-44 rounded-md border border-input bg-card px-2 text-xs" onChange={(event) => void changeCategory(item.id, event.target.value)} value={item.category_id ?? ""}><option value="">Sem categoria</option>{categories.filter((candidate) => candidate.kind === (item.type === "debit" ? "expense" : "income")).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select></td>
                       <td className="px-3 py-4 text-muted-foreground">{item.account_name}</td>
                       <td className="px-3 py-4 text-muted-foreground">{item.member_name}</td>
                       <td className={`px-3 py-4 text-right font-medium tabular-nums ${item.type === "credit" ? "text-primary" : ""}`}>{money.format(Number(item.amount))}</td>
                     </tr>
-                  ))}</tbody>
+                    {expanded && (
+                      <tr className="border-b border-border/60 bg-muted/35">
+                        <td className="px-3 py-4" colSpan={6}>
+                          <p className="mb-3 text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">Itens da nota</p>
+                          <ul className="grid list-none gap-2 p-0 sm:grid-cols-2">
+                            {item.invoice_items.map((invoiceItem) => (
+                              <li className="grid grid-cols-[1fr_auto] gap-3 text-sm" key={invoiceItem.id}>
+                                <span>{invoiceItem.description} · {Number(invoiceItem.quantity).toLocaleString("pt-BR")} {invoiceItem.unit ?? "un."}</span>
+                                <span className="tabular-nums">{money.format(Number(invoiceItem.total_price))}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                  );})}</tbody>
                 </table>
               </div>
             ) : (
