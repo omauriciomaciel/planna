@@ -107,9 +107,7 @@ class PluggyItem(TimestampMixin, Base):
 
 class Category(TimestampMixin, Base):
     __tablename__ = "categories"
-    __table_args__ = (
-        CheckConstraint("kind IN ('expense', 'income')", name="ck_category_kind"),
-    )
+    __table_args__ = (CheckConstraint("kind IN ('expense', 'income')", name="ck_category_kind"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     household_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -160,6 +158,57 @@ class AccountBalanceSnapshot(Base):
     )
 
 
+class Invoice(TimestampMixin, Base):
+    __tablename__ = "invoices"
+    __table_args__ = (
+        CheckConstraint(
+            "payment_status IN ('reconciled', 'voucher')", name="ck_invoice_payment_status"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    access_key: Mapped[str] = mapped_column(String(44), unique=True)
+    number: Mapped[str | None] = mapped_column(String(20))
+    series: Mapped[str | None] = mapped_column(String(10))
+    issue_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    gross_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    merchant_cnpj: Mapped[str | None] = mapped_column(String(14), index=True)
+    merchant_name: Mapped[str] = mapped_column(String(200))
+    merchant_address: Mapped[str | None] = mapped_column(String(500))
+    source_url: Mapped[str] = mapped_column(String(4096))
+    payment_method_raw: Mapped[str | None] = mapped_column(String(120))
+    payment_status: Mapped[str] = mapped_column(String(16))
+    matched_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="SET NULL"), unique=True
+    )
+    match_confidence: Mapped[Decimal] = mapped_column(Numeric(3, 2))
+    protocol: Mapped[str | None] = mapped_column(String(100))
+    raw: Mapped[dict] = mapped_column(JSON)
+
+
+class InvoiceItem(Base):
+    __tablename__ = "invoice_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    invoice_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("invoices.id", ondelete="CASCADE"), index=True
+    )
+    description: Mapped[str] = mapped_column(String(500))
+    product_code: Mapped[str | None] = mapped_column(String(80))
+    ncm: Mapped[str | None] = mapped_column(String(16))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4))
+    unit: Mapped[str | None] = mapped_column(String(20))
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4))
+    total_price: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), index=True)
+
+
 class Transaction(TimestampMixin, Base):
     __tablename__ = "transactions"
     __table_args__ = (
@@ -168,10 +217,19 @@ class Transaction(TimestampMixin, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID] = mapped_column(
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("accounts.id", ondelete="CASCADE"), index=True
     )
-    pluggy_transaction_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    pluggy_transaction_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+    source_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "invoices.id",
+            name="fk_transactions_source_invoice_id",
+            ondelete="CASCADE",
+            use_alter=True,
+        ),
+        unique=True,
+    )
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     description: Mapped[str] = mapped_column(String(500))

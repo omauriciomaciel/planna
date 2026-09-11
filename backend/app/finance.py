@@ -14,11 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import CurrentAuth
 from app.config import settings
 from app.database import DbSession, SessionLocal
+from app.invoices import reconcile_unmatched_invoices
 from app.models import (
     Account,
     AccountBalanceSnapshot,
     Category,
     HouseholdMember,
+    Invoice,
+    InvoiceItem,
     PluggyItem,
     Transaction,
     User,
@@ -29,6 +32,7 @@ from app.schemas import (
     CategoryCreate,
     CategoryExpenseRead,
     CategoryRead,
+    InvoiceItemRead,
     KpiRead,
     KpisRead,
     Message,
@@ -176,6 +180,7 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
             transaction_count += 1
         db.add(AccountBalanceSnapshot(account_id=account.id, balance=account.balance))
     item.last_synced_at = datetime.now(UTC)
+    await reconcile_unmatched_invoices(db, item.household_id)
     await db.commit()
     return SyncRead(items=1, accounts=account_count, transactions=transaction_count)
 
@@ -323,11 +328,18 @@ async def create_category(payload: CategoryCreate, auth: CurrentAuth, db: DbSess
 
 def _transaction_query(household_id: uuid.UUID):
     return (
-        select(Transaction, Account.name, Account.member_id, User.name, Category.name)
-        .join(Account, Account.id == Transaction.account_id)
-        .join(User, User.id == Account.member_id)
+        select(
+            Transaction,
+            Account.name,
+            func.coalesce(Account.member_id, Invoice.member_id),
+            User.name,
+            Category.name,
+        )
+        .outerjoin(Account, Account.id == Transaction.account_id)
+        .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
+        .join(User, User.id == func.coalesce(Account.member_id, Invoice.member_id))
         .outerjoin(Category, Category.id == Transaction.category_id)
-        .where(Account.household_id == household_id)
+        .where(or_(Account.household_id == household_id, Invoice.household_id == household_id))
     )
 
 
@@ -358,7 +370,7 @@ async def transactions(
     for column, value in (
         (Transaction.category_id, category_id),
         (Transaction.account_id, account_id),
-        (Account.member_id, member_id),
+        (func.coalesce(Account.member_id, Invoice.member_id), member_id),
         (Transaction.type, type),
     ):
         if value is not None:
@@ -371,30 +383,83 @@ async def transactions(
                 and_(Transaction.date == cursor_date, Transaction.id < cursor_id),
             )
         )
-    rows = (await db.execute(query.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(limit + 1))).all()
+    rows = (
+        await db.execute(
+            query.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(limit + 1)
+        )
+    ).all()
     has_more = len(rows) > limit
     rows = rows[:limit]
-    items = [
-        TransactionRead(
-            id=row.id,
-            date=row.date,
-            description=row.description,
-            merchant_name=row.merchant_name,
-            amount=row.amount,
-            type=row.type,
-            status=row.status,
-            source=row.source,
-            category_id=row.category_id,
-            category_name=category_name,
-            account_id=row.account_id,
-            account_name=account_name,
-            member_id=row_member_id,
-            member_name=member_name,
-            installment_current=row.installment_current,
-            installment_total=row.installment_total,
+    invoice_by_transaction: dict[uuid.UUID, Invoice] = {}
+    items_by_invoice: dict[uuid.UUID, list[InvoiceItem]] = {}
+    if rows:
+        transaction_ids = [row[0].id for row in rows]
+        source_invoice_ids = [row[0].source_invoice_id for row in rows if row[0].source_invoice_id]
+        invoices = (
+            await db.scalars(
+                select(Invoice).where(
+                    or_(
+                        Invoice.matched_transaction_id.in_(transaction_ids),
+                        Invoice.id.in_(source_invoice_ids),
+                    )
+                )
+            )
+        ).all()
+        if invoices:
+            invoice_ids = [invoice.id for invoice in invoices]
+            invoice_items = (
+                await db.scalars(
+                    select(InvoiceItem)
+                    .where(InvoiceItem.invoice_id.in_(invoice_ids))
+                    .order_by(InvoiceItem.id)
+                )
+            ).all()
+            for invoice in invoices:
+                transaction_id = invoice.matched_transaction_id or next(
+                    row[0].id for row in rows if row[0].source_invoice_id == invoice.id
+                )
+                invoice_by_transaction[transaction_id] = invoice
+            for invoice_item in invoice_items:
+                items_by_invoice.setdefault(invoice_item.invoice_id, []).append(invoice_item)
+    items: list[TransactionRead] = []
+    for row, account_name, row_member_id, member_name, category_name in rows:
+        invoice = invoice_by_transaction.get(row.id)
+        items.append(
+            TransactionRead(
+                id=row.id,
+                date=row.date,
+                description=row.description,
+                merchant_name=row.merchant_name,
+                amount=row.amount,
+                type=row.type,
+                status=row.status,
+                source=row.source,
+                category_id=row.category_id,
+                category_name=category_name,
+                account_id=row.account_id,
+                account_name=account_name or "Vale-alimentação",
+                member_id=row_member_id,
+                member_name=member_name,
+                installment_current=row.installment_current,
+                installment_total=row.installment_total,
+                invoice_id=invoice.id if invoice else None,
+                invoice_items=[
+                    InvoiceItemRead(
+                        id=item.id,
+                        description=item.description,
+                        product_code=item.product_code,
+                        quantity=item.quantity,
+                        unit=item.unit,
+                        unit_price=item.unit_price,
+                        total_price=item.total_price,
+                        category_id=item.category_id,
+                    )
+                    for item in items_by_invoice.get(invoice.id, [])
+                ]
+                if invoice
+                else [],
+            )
         )
-        for row, account_name, row_member_id, member_name, category_name in rows
-    ]
     next_cursor = encode_cursor(items[-1].date, items[-1].id) if has_more and items else None
     return TransactionPage(items=items, next_cursor=next_cursor)
 
@@ -408,8 +473,15 @@ async def update_transaction_category(
 ) -> Message:
     transaction = await db.scalar(
         select(Transaction)
-        .join(Account, Account.id == Transaction.account_id)
-        .where(Transaction.id == transaction_id, Account.household_id == auth.household.id)
+        .outerjoin(Account, Account.id == Transaction.account_id)
+        .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
+        .where(
+            Transaction.id == transaction_id,
+            or_(
+                Account.household_id == auth.household.id,
+                Invoice.household_id == auth.household.id,
+            ),
+        )
     )
     if transaction is None:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
@@ -434,9 +506,10 @@ async def _totals(db: AsyncSession, household_id: uuid.UUID, start: date, end: d
                 func.coalesce(func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0),
                 func.coalesce(func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0),
             )
-            .join(Account, Account.id == Transaction.account_id)
+            .outerjoin(Account, Account.id == Transaction.account_id)
+            .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
             .where(
-                Account.household_id == household_id,
+                or_(Account.household_id == household_id, Invoice.household_id == household_id),
                 Transaction.date >= datetime.combine(start, time.min, UTC),
                 Transaction.date < datetime.combine(end + timedelta(days=1), time.min, UTC),
             )
@@ -551,9 +624,13 @@ async def trends(
                 func.coalesce(func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0),
                 func.coalesce(func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0),
             )
-            .join(Account, Account.id == Transaction.account_id)
+            .outerjoin(Account, Account.id == Transaction.account_id)
+            .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
             .where(
-                Account.household_id == auth.household.id,
+                or_(
+                    Account.household_id == auth.household.id,
+                    Invoice.household_id == auth.household.id,
+                ),
                 Transaction.date >= datetime.combine(start_month, time.min, UTC),
                 Transaction.date < datetime.combine(_shift_month(end_month, 1), time.min, UTC),
             )
@@ -585,10 +662,14 @@ async def expenses_by_category(
     rows = (
         await db.execute(
             select(Category.id, func.coalesce(Category.name, "Sem categoria"), func.sum(-Transaction.amount))
-            .join(Account, Account.id == Transaction.account_id)
+            .outerjoin(Account, Account.id == Transaction.account_id)
+            .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
             .outerjoin(Category, Category.id == Transaction.category_id)
             .where(
-                Account.household_id == auth.household.id,
+                or_(
+                    Account.household_id == auth.household.id,
+                    Invoice.household_id == auth.household.id,
+                ),
                 Transaction.amount < 0,
                 Transaction.date >= datetime.combine(start, time.min, UTC),
                 Transaction.date < datetime.combine(end + timedelta(days=1), time.min, UTC),

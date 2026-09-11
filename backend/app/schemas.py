@@ -97,12 +97,14 @@ class TransactionRead(BaseModel):
     source: str
     category_id: uuid.UUID | None
     category_name: str | None
-    account_id: uuid.UUID
+    account_id: uuid.UUID | None
     account_name: str
     member_id: uuid.UUID
     member_name: str
     installment_current: int | None
     installment_total: int | None
+    invoice_id: uuid.UUID | None
+    invoice_items: list["InvoiceItemRead"] = Field(default_factory=list)
 
 
 class TransactionPage(BaseModel):
@@ -135,3 +137,44 @@ class CategoryExpenseRead(BaseModel):
     category_id: uuid.UUID | None
     category: str
     amount: Decimal
+
+
+class InvoiceIngestRequest(BaseModel):
+    url: str = Field(min_length=44, max_length=4096)
+
+
+class InvoiceResolveRequest(BaseModel):
+    transaction_id: uuid.UUID | None = None
+
+
+class InvoiceItemRead(BaseModel):
+    id: uuid.UUID
+    description: str
+    product_code: str | None
+    quantity: Decimal
+    unit: str | None
+    unit_price: Decimal
+    total_price: Decimal
+    category_id: uuid.UUID | None
+
+
+class InvoiceRead(BaseModel):
+    id: uuid.UUID
+    access_key: str
+    number: str | None
+    series: str | None
+    issue_datetime: datetime
+    total_amount: Decimal
+    merchant_cnpj: str | None
+    merchant_name: str
+    payment_method_raw: str | None
+    payment_status: str
+    matched_transaction_id: uuid.UUID | None
+    match_confidence: Decimal
+    needs_review: bool
+    items: list[InvoiceItemRead] = Field(default_factory=list)
+
+
+class InvoiceIngestRead(BaseModel):
+    invoice: InvoiceRead
+    created: bool
