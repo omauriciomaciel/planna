@@ -29,6 +29,21 @@ npm run dev
 
 Abra `http://localhost:3000`. A API fica disponível em `http://localhost:8010/docs` e é acessada pelo frontend por `/api`.
 
+Como alternativa, execute PostgreSQL e backend com reload automático no Docker:
+
+```bash
+cp backend/.env.example backend/.env
+docker compose up -d --build backend
+docker compose exec backend uv run --frozen --no-dev python -m app.bootstrap "Casa" "Pessoa 1:pessoa1@example.com" "Pessoa 2:pessoa2@example.com"
+docker compose logs -f backend
+```
+
+O diretório `backend/` é montado em `/app`; mudanças nos arquivos reiniciam o servidor automaticamente.
+
+## Open Finance
+
+Preencha `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` no `backend/.env`. Para receber atualizações automáticas, configure também uma `PLUGGY_WEBHOOK_URL` pública HTTPS apontando para `/webhooks/pluggy` e gere um `PLUGGY_WEBHOOK_SECRET` aleatório com pelo menos 32 caracteres. Sem essas variáveis, o restante do painel continua funcionando e a ação de conectar instituição informa que a integração não está configurada.
+
 ## Verificar
 
 ```bash

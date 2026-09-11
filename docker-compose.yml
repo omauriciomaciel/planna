@@ -1,4 +1,24 @@
 services:
+  backend:
+    build:
+      context: ./backend
+    command:
+      - sh
+      - -c
+      - uv run --frozen --no-dev alembic upgrade head && exec uv run --frozen --no-dev fastapi dev --host 0.0.0.0 --port 8010
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://planna:planna@postgres:5432/planna
+      WATCHFILES_FORCE_POLLING: "true"
+    ports:
+      - "${BACKEND_PORT:-8010}:8010"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:17-alpine
     environment:
