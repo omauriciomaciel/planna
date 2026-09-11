@@ -68,11 +68,11 @@
   --border: oklch(0.82 0.02 85 / 65%);
   --input: oklch(0.88 0.018 85);
   --ring: oklch(0.48 0.07 160);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: oklch(0.42 0.08 160);
+  --chart-2: oklch(0.66 0.1 72);
+  --chart-3: oklch(0.52 0.055 215);
+  --chart-4: oklch(0.62 0.065 125);
+  --chart-5: oklch(0.5 0.035 35);
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);

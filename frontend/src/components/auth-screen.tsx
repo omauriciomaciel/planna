@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -18,6 +17,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Dashboard } from "@/components/dashboard";
 
 type Member = {
   id: string;
@@ -101,85 +101,78 @@ export function AuthScreen() {
 
   if (view === "checking") {
     return (
-      <Card aria-live="polite">
-        <CardHeader>
-          <CardTitle>Verificando acesso</CardTitle>
-          <CardDescription>Um instante.</CardDescription>
-        </CardHeader>
-      </Card>
+      <main className="flex min-h-svh items-center justify-center px-4 py-12">
+        <Card aria-live="polite" className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Verificando acesso</CardTitle>
+            <CardDescription>Um instante.</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
     );
   }
 
   if (view === "authenticated" && me) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardDescription>Household compartilhado</CardDescription>
-          <CardTitle>{me.household.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="flex list-none flex-col gap-3 p-0">
-            {me.household.members.map((member) => (
-              <li className="flex items-baseline justify-between gap-4" key={member.id}>
-                <span className="font-medium">{member.name}</span>
-                <span className="text-sm text-muted-foreground">
-                  {member.role === "owner" ? "Responsável" : "Membro"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-        <CardFooter>
-          <Button disabled={pending} onClick={logout} variant="outline">
-            Sair
-          </Button>
-        </CardFooter>
-      </Card>
-    );
+    return <Dashboard me={me} onLogout={logout} pendingLogout={pending} />;
   }
 
   return (
-    <Card aria-live="polite">
-      <CardHeader>
-        <CardTitle>{view === "requested" ? "Confira seu e-mail" : "Entrar"}</CardTitle>
-        <CardDescription>
-          {view === "requested"
-            ? "Enviamos um link de acesso, se este endereço estiver autorizado."
-            : "Use um dos e-mails previamente cadastrados para o casal."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {view === "requested" ? (
-          <Button onClick={() => setView("guest")} variant="outline">
-            Usar outro e-mail
-          </Button>
-        ) : (
-          <form onSubmit={requestLink}>
-            <FieldGroup>
-              <Field data-invalid={view === "error" || undefined}>
-                <FieldLabel htmlFor="email">E-mail</FieldLabel>
-                <Input
-                  aria-invalid={view === "error" || undefined}
-                  autoComplete="email"
-                  id="email"
-                  name="email"
-                  placeholder="voce@exemplo.com"
-                  required
-                  type="email"
-                />
-                <FieldDescription>
-                  {view === "error"
-                    ? "Não foi possível concluir agora. Tente novamente."
-                    : "O link expira em 15 minutos e só pode ser usado uma vez."}
-                </FieldDescription>
-              </Field>
-              <Button disabled={pending} type="submit">
-                {pending ? "Enviando…" : "Enviar link de acesso"}
+    <main className="flex min-h-svh items-center justify-center px-4 py-12 sm:px-8">
+      <div className="grid w-full max-w-5xl items-center gap-12 lg:grid-cols-[1fr_26rem]">
+        <section className="flex max-w-xl flex-col gap-6">
+          <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground uppercase">
+            Planna · contas da casa
+          </p>
+          <h1 className="text-balance text-4xl leading-[1.12] font-semibold tracking-tight sm:text-5xl">
+            A vida financeira do casal em um só lugar.
+          </h1>
+          <p className="max-w-[60ch] text-pretty text-base leading-[1.45] text-muted-foreground sm:text-lg">
+            Banco + nota fiscal → uma visão compartilhada, simples e auditável.
+          </p>
+        </section>
+        <Card aria-live="polite">
+          <CardHeader>
+            <CardTitle>{view === "requested" ? "Confira seu e-mail" : "Entrar"}</CardTitle>
+            <CardDescription>
+              {view === "requested"
+                ? "Enviamos um link de acesso, se este endereço estiver autorizado."
+                : "Use um dos e-mails previamente cadastrados para o casal."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {view === "requested" ? (
+              <Button onClick={() => setView("guest")} variant="outline">
+                Usar outro e-mail
               </Button>
-            </FieldGroup>
-          </form>
-        )}
-      </CardContent>
-    </Card>
+            ) : (
+              <form onSubmit={requestLink}>
+                <FieldGroup>
+                  <Field data-invalid={view === "error" || undefined}>
+                    <FieldLabel htmlFor="email">E-mail</FieldLabel>
+                    <Input
+                      aria-invalid={view === "error" || undefined}
+                      autoComplete="email"
+                      id="email"
+                      name="email"
+                      placeholder="voce@exemplo.com"
+                      required
+                      type="email"
+                    />
+                    <FieldDescription>
+                      {view === "error"
+                        ? "Não foi possível concluir agora. Tente novamente."
+                        : "O link expira em 15 minutos e só pode ser usado uma vez."}
+                    </FieldDescription>
+                  </Field>
+                  <Button disabled={pending} type="submit">
+                    {pending ? "Enviando…" : "Enviar link de acesso"}
+                  </Button>
+                </FieldGroup>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </main>
   );
 }
