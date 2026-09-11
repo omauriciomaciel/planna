@@ -216,3 +216,6 @@ frontend/.output/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# mac files
+.DS_Store
