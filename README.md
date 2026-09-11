@@ -44,6 +44,10 @@ O diretório `backend/` é montado em `/app`; mudanças nos arquivos reiniciam o
 
 Preencha `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` no `backend/.env`. Para receber atualizações automáticas, configure também uma `PLUGGY_WEBHOOK_URL` pública HTTPS apontando para `/webhooks/pluggy` e gere um `PLUGGY_WEBHOOK_SECRET` aleatório com pelo menos 32 caracteres. Sem essas variáveis, o restante do painel continua funcionando e a ação de conectar instituição informa que a integração não está configurada.
 
+## Notas fiscais
+
+No painel autenticado, cole o link da NFC-e de Alagoas ou fotografe o QR code. A API persiste a nota e seus itens, evita duplicidade pela chave de acesso e procura uma transação Pluggy de mesmo valor entre a emissão e os dois dias seguintes. Sem correspondência, a compra entra no extrato e nos indicadores como vale-alimentação.
+
 ## Verificar
 
 ```bash

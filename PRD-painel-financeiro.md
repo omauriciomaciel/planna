@@ -325,7 +325,7 @@ Princípio: **cálculo determinístico no backend, redação e priorização na 
 | POST | `/webhooks/pluggy` | recebe eventos Pluggy |
 | POST | `/invoices/ingest` | ingest de nota por URL |
 | GET | `/invoices` / `/invoices/{id}` | consulta notas e itens |
-| POST | `/invoices/{id}/resolve` | confirma vale/dinheiro/override |
+| POST | `/invoices/{id}/resolve` | confirma vale ou seleciona a transação bancária |
 | GET | `/analytics/kpis` | KPIs + variações |
 | GET | `/analytics/trends` | série mensal |
 | GET | `/analytics/expenses-by-category` | dados da pizza |
