@@ -2,7 +2,7 @@
 
 **Versão:** 0.2 (reconciliação por 2 sinais + contrato real de ingest SEFAZ)
 **Escopo:** aplicação de finanças pessoais para um casal ("contas da casa")
-**Autor:** (você) · **Data:** 2026-09-10
+**Autor:** Mauricio Ferreira · **Data:** 2026-09-10
 
 ---
 
@@ -361,6 +361,7 @@ sequenceDiagram
 ```
 
 **Requisitos de segurança**
+- Apenas emails cadastrados na base previamente terão ascesso.
 - Cookie **HttpOnly + Secure + SameSite=Lax**, assinado; sessão opaca em `sessions` (revogável) ou JWT curto com refresh — a decidir (§14).
 - Token de magic link: aleatório forte, guardado só como hash, expiração ~15min, **uso único**, invalidação dos anteriores ao emitir novo.
 - **Rate limiting** por e-mail e por IP no endpoint de solicitação; proteção contra enumeração (resposta sempre neutra).
@@ -371,7 +372,7 @@ sequenceDiagram
 
 ## 12. Requisitos não-funcionais
 
-- **PWA:** instalável, manifest + service worker; leitura offline dos dados já sincronizados; layout responsivo (mobile-first).
+- **PWA:** instalável, manifest + service worker; leitura offline dos dados já sincronizados; layout responsivo (mobile-first mas também adaptado para desktop).
 - **Segurança/LGPD:** dados financeiros são sensíveis — criptografia em trânsito (HTTPS) e de segredos em repouso; princípio do menor dado enviado à OpenAI; política de retenção e exclusão; consentimento e transparência sobre uso de IA; logs sem PII.
 - **Performance:** endpoints de leitura < 300ms p95 sob dados do household; gráficos renderizam < 1s.
 - **Confiabilidade:** jobs idempotentes; retries com backoff no sync Pluggy e no ingest SEFAZ; "última atualização" visível ao usuário.
@@ -397,12 +398,12 @@ sequenceDiagram
 
 ## 14. Decisões em aberto / premissas a confirmar
 
-1. **Compartilhamento no household:** tudo compartilhado entre o casal, ou permitir contas privadas? (premissa atual: tudo compartilhado)
-2. **Índice de Endividamento:** exibir Passivos/Ativos, comprometimento de renda, ou ambos? (premissa: ambos, com destaque para comprometimento de renda)
+1. **Compartilhamento no household:** tudo compartilhado entre o casal, ou permitir contas privadas? (premissa atual: tudo compartilhado) **DECIDIDO** tudo compartilhado
+2. **Índice de Endividamento:** exibir Passivos/Ativos, comprometimento de renda, ou ambos? (premissa: ambos, com destaque para comprometimento de renda) **DECIDIDO** mostrar ambos
 3. ~~Heurística de vale-alimentação~~ **DECIDIDO (v0.2):** household não usa dinheiro → sem match no Pluggy = `voucher`. `payment_method_raw` fica só como pista/auditoria. Estado `cash` removido do modelo.
-4. **Sessão:** cookie de sessão opaca (revogável) vs JWT. (premissa: sessão opaca em tabela, mais simples de revogar)
-5. **Script SEFAZ:** encapsular como módulo interno (premissa) ou microserviço separado?
-6. **Ingest SEFAZ:** manual/QR nesta fase; automação futura fica fora de escopo?
+4. **Sessão:** cookie de sessão opaca (revogável) vs JWT. (premissa: sessão opaca em tabela, mais simples de revogar) **DECIDIDO** o que for mais seguro
+5. **Script SEFAZ:** encapsular como módulo interno (premissa) ou microserviço separado? **DECIDIDO** módulo interno 
+6. **Ingest SEFAZ:** manual/QR nesta fase; automação futura fica fora de escopo? **DECIDIDO** manual escaneando o qr code da nota ou inserindo o código de verificacao da nota
 7. **Frequência de valuation de investimentos/imóveis:** diária (Pluggy) e manual pontual — periodicidade do snapshot manual?
 8. **Modelo OpenAI e orçamento:** definir o teto mensal e o modelo-alvo.
 
