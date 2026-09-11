@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str = "acesso@planna.local"
     smtp_use_tls: bool = True
+    pluggy_client_id: str | None = None
+    pluggy_client_secret: str | None = None
+    pluggy_webhook_url: str | None = None
+    pluggy_webhook_secret: str | None = Field(default=None, min_length=32)
 
     @property
     def secure_cookies(self) -> bool:
