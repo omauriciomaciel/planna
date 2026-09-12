@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Dashboard } from "@/components/dashboard";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type Member = {
   id: string;
@@ -101,11 +102,12 @@ export function AuthScreen() {
 
   if (view === "checking") {
     return (
-      <main className="flex min-h-svh items-center justify-center px-4 py-12">
-        <Card aria-live="polite" className="w-full max-w-md">
+      <main className="flex min-h-svh items-center justify-center bg-background px-4 py-12">
+        <ThemeToggle className="absolute top-4 right-4" />
+        <Card aria-live="polite" className="w-full max-w-sm">
           <CardHeader>
             <CardTitle>Verificando acesso</CardTitle>
-            <CardDescription>Um instante.</CardDescription>
+            <CardDescription>Preparando sua visão financeira&hellip;</CardDescription>
           </CardHeader>
         </Card>
       </main>
@@ -117,62 +119,84 @@ export function AuthScreen() {
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center px-4 py-12 sm:px-8">
-      <div className="grid w-full max-w-5xl items-center gap-12 lg:grid-cols-[1fr_26rem]">
-        <section className="flex max-w-xl flex-col gap-6">
-          <p className="text-sm font-medium tracking-[0.08em] text-muted-foreground uppercase">
-            Planna · contas da casa
+    <main className="relative grid min-h-svh bg-card lg:grid-cols-[1.1fr_0.9fr]">
+      <ThemeToggle className="absolute top-4 right-4 z-10" />
+      <section className="relative hidden overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:flex-col lg:justify-between xl:p-16">
+        <div className="flex items-center gap-3 text-sm font-semibold tracking-[0.08em] uppercase">
+          <span className="grid size-10 place-items-center rounded-full bg-primary-foreground text-lg font-bold text-primary">P</span>
+          Planna
+        </div>
+        <div className="flex max-w-xl flex-col gap-5">
+          <p className="text-sm font-semibold tracking-[0.08em] text-primary-foreground uppercase">Finanças da casa</p>
+          <h2 className="text-balance text-5xl leading-[1.04] font-semibold tracking-[-0.04em] xl:text-6xl">
+            A vida financeira de vocês, em uma só visão.
+          </h2>
+          <p className="max-w-[52ch] text-pretty text-lg leading-[1.45] text-primary-foreground">
+            Contas, notas fiscais e decisões compartilhadas, sem perder o fio da meada.
           </p>
-          <h1 className="text-balance text-4xl leading-[1.12] font-semibold tracking-tight sm:text-5xl">
-            A vida financeira do casal em um só lugar.
-          </h1>
-          <p className="max-w-[60ch] text-pretty text-base leading-[1.45] text-muted-foreground sm:text-lg">
-            Banco + nota fiscal → uma visão compartilhada, simples e auditável.
-          </p>
-        </section>
-        <Card aria-live="polite">
-          <CardHeader>
-            <CardTitle>{view === "requested" ? "Confira seu e-mail" : "Entrar"}</CardTitle>
-            <CardDescription>
+        </div>
+        <p className="text-sm text-primary-foreground">Seguro, simples e feito para a rotina.</p>
+      </section>
+
+      <section className="flex items-center justify-center px-5 py-10 sm:px-10">
+        <div className="flex w-full max-w-md flex-col gap-10">
+          <div className="flex items-center gap-3 lg:hidden">
+            <span className="grid size-11 place-items-center rounded-full bg-primary text-lg font-bold text-primary-foreground">P</span>
+            <span className="text-sm font-semibold tracking-[0.08em] uppercase">Planna</span>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-semibold tracking-[0.08em] text-primary uppercase dark:text-foreground">Bem-vindos</p>
+            <h1 className="text-3xl leading-[1.12] font-semibold tracking-[-0.035em]">
+              {view === "requested" ? "Confira seu e-mail" : "Acesse a conta da casa"}
+            </h1>
+            <p className="max-w-[46ch] text-pretty text-base leading-[1.45] text-muted-foreground">
               {view === "requested"
                 ? "Enviamos um link de acesso, se este endereço estiver autorizado."
                 : "Use um dos e-mails previamente cadastrados para o casal."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {view === "requested" ? (
-              <Button onClick={() => setView("guest")} variant="outline">
-                Usar outro e-mail
-              </Button>
-            ) : (
-              <form onSubmit={requestLink}>
-                <FieldGroup>
-                  <Field data-invalid={view === "error" || undefined}>
-                    <FieldLabel htmlFor="email">E-mail</FieldLabel>
-                    <Input
-                      aria-invalid={view === "error" || undefined}
-                      autoComplete="email"
-                      id="email"
-                      name="email"
-                      placeholder="voce@exemplo.com"
-                      required
-                      type="email"
-                    />
-                    <FieldDescription>
-                      {view === "error"
-                        ? "Não foi possível concluir agora. Tente novamente."
-                        : "O link expira em 15 minutos e só pode ser usado uma vez."}
-                    </FieldDescription>
-                  </Field>
-                  <Button disabled={pending} type="submit">
-                    {pending ? "Enviando…" : "Enviar link de acesso"}
-                  </Button>
-                </FieldGroup>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </p>
+          </div>
+
+          <Card aria-live="polite" className="border-0 shadow-none sm:border sm:shadow-[0_12px_32px_rgba(24,24,35,0.05)] sm:dark:shadow-none">
+            <CardHeader className="sr-only">
+              <CardTitle>{view === "requested" ? "Link enviado" : "Entrar"}</CardTitle>
+              <CardDescription>Autenticação do Planna</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {view === "requested" ? (
+                <Button className="w-full" onClick={() => setView("guest")} variant="outline">
+                  Usar outro e-mail
+                </Button>
+              ) : (
+                <form onSubmit={requestLink}>
+                  <FieldGroup>
+                    <Field data-invalid={view === "error" || undefined}>
+                      <FieldLabel htmlFor="email">E-mail</FieldLabel>
+                      <Input
+                        aria-invalid={view === "error" || undefined}
+                        autoComplete="email"
+                        id="email"
+                        name="email"
+                        placeholder="voce@exemplo.com"
+                        required
+                        type="email"
+                      />
+                      <FieldDescription>
+                        {view === "error"
+                          ? "Não foi possível concluir agora. Tente novamente."
+                          : "O link expira em 15 minutos e só pode ser usado uma vez."}
+                      </FieldDescription>
+                    </Field>
+                    <Button className="w-full" disabled={pending} type="submit">
+                      {pending ? "Enviando…" : "Enviar link de acesso"}
+                    </Button>
+                  </FieldGroup>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
     </main>
   );
 }

@@ -90,7 +90,7 @@ export function InvoiceCapture({
   }
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle>Adicionar nota fiscal</CardTitle>
         <CardDescription>
@@ -131,7 +131,7 @@ export function InvoiceCapture({
                 Se o navegador não reconhecer a imagem, use o campo acima.
               </FieldDescription>
             </Field>
-            <Button disabled={pending || !url.trim()} type="submit">
+            <Button className="w-full" disabled={pending || !url.trim()} type="submit">
               <ReceiptText data-icon="inline-start" />
               {pending ? "Consultando a SEFAZ…" : "Importar nota"}
             </Button>
@@ -139,7 +139,7 @@ export function InvoiceCapture({
         </form>
 
         {result && (
-          <div aria-live="polite" className="flex flex-col gap-2 rounded-lg bg-muted/60 p-4">
+          <div aria-live="polite" className="flex flex-col gap-2 rounded-2xl bg-muted/70 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium">{result.invoice.merchant_name}</p>
               <Badge variant={result.invoice.payment_status === "voucher" ? "secondary" : "outline"}>
