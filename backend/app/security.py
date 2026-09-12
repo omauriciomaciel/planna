@@ -7,6 +7,8 @@ from threading import Lock
 
 from app.config import settings
 
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
 
 def hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
@@ -30,6 +32,20 @@ def verify_cookie(value: str) -> str | None:
 
 def new_secret() -> str:
     return secrets.token_urlsafe(32)
+
+
+def session_cookie_name() -> str:
+    return "__Host-planna_session" if settings.secure_cookies else "planna_session"
+
+
+def csrf_origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return False
+    allowed = {
+        settings.frontend_url.rstrip("/"),
+        *(item.rstrip("/") for item in settings.cors_origins),
+    }
+    return origin.rstrip("/") in allowed
 
 
 class RateLimiter:

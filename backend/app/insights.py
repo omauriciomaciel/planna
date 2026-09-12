@@ -15,7 +15,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import CurrentAuth
 from app.config import settings
 from app.database import DbSession
-from app.models import Account, AIRun, Category, Insight, Invoice, Liability, Transaction
+from app.models import (
+    Account,
+    AIRun,
+    Category,
+    HouseholdMember,
+    Insight,
+    Invoice,
+    Liability,
+    Transaction,
+    User,
+)
 from app.schemas import InsightActionRead, InsightRead
 
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -398,8 +408,10 @@ async def _financial_data(
     )
 
 
-async def _narrate(signals: list[Signal]) -> tuple[list[Narrative], int, int, str]:
-    if not signals or settings.openai_api_key is None:
+async def _narrate(
+    signals: list[Signal], *, allow_external_ai: bool = True
+) -> tuple[list[Narrative], int, int, str]:
+    if not signals or settings.openai_api_key is None or not allow_external_ai:
         return [Narrative.model_validate(signal.model_dump(exclude={"evidence"})) for signal in signals], 0, 0, "deterministic"
 
     payload = {
@@ -512,7 +524,18 @@ async def refresh_insights(db: AsyncSession, household_id: uuid.UUID) -> list[In
     )
     signals = calculate_signals(months, expenses, cash_balance, monthly_debt_payments)
     await db.commit()
-    narratives, prompt_tokens, completion_tokens, model = await _narrate(signals)
+    missing_consent = await db.scalar(
+        select(func.count())
+        .select_from(HouseholdMember)
+        .join(User, User.id == HouseholdMember.user_id)
+        .where(
+            HouseholdMember.household_id == household_id,
+            User.ai_consent_at.is_(None),
+        )
+    )
+    narratives, prompt_tokens, completion_tokens, model = await _narrate(
+        signals, allow_external_ai=not missing_consent
+    )
     signal_by_id = {signal.signal_id: signal for signal in signals}
 
     await db.execute(delete(Insight).where(Insight.household_id == household_id))

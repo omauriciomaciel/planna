@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import smtplib
 import time
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -32,20 +31,20 @@ from app.security import (
     hash_secret,
     ip_limiter,
     new_secret,
+    session_cookie_name,
     sign_cookie,
     verify_cookie,
 )
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
-SESSION_COOKIE = "planna_session"
+SESSION_COOKIE = session_cookie_name()
 MAGIC_LINK_TTL = timedelta(minutes=15)
 SESSION_TTL = timedelta(days=30)
+PRIVACY_VERSION = "2026-09-12"
 
 
 def _send_email(recipient: str, link: str) -> None:
     if not settings.smtp_host:
-        logger.warning("Magic link de desenvolvimento para %s: %s", recipient, link)
         return
 
     message = EmailMessage()
@@ -62,7 +61,13 @@ def _send_email(recipient: str, link: str) -> None:
         smtp.send_message(message)
 
 
-async def issue_magic_link(db: AsyncSession, email: str, ip: str | None) -> tuple[str, str] | None:
+async def issue_magic_link(
+    db: AsyncSession,
+    email: str,
+    ip: str | None,
+    *,
+    ai_consent: bool = False,
+) -> tuple[str, str] | None:
     normalized = email.strip().lower()
     if not email_limiter.allow(normalized) or not ip_limiter.allow(ip or "unknown"):
         return None
@@ -72,12 +77,19 @@ async def issue_magic_link(db: AsyncSession, email: str, ip: str | None) -> tupl
         return None
 
     now = datetime.now(UTC)
+    await db.execute(delete(MagicLinkToken).where(MagicLinkToken.expires_at <= now))
+    await db.execute(
+        delete(Session).where(or_(Session.expires_at <= now, Session.revoked_at.is_not(None)))
+    )
     await db.execute(
         update(MagicLinkToken)
         .where(MagicLinkToken.email == normalized, MagicLinkToken.used_at.is_(None))
         .values(used_at=now)
     )
     raw_token = new_secret()
+    user.privacy_accepted_at = now
+    user.privacy_version = PRIVACY_VERSION
+    user.ai_consent_at = now if ai_consent else None
     db.add(
         MagicLinkToken(
             email=normalized,
@@ -138,12 +150,22 @@ async def request_magic_link(
 ) -> Message:
     started = time.monotonic()
     delivery = await issue_magic_link(
-        db, str(payload.email), request.client.host if request.client else None
+        db,
+        str(payload.email),
+        request.client.host if request.client else None,
+        ai_consent=payload.ai_consent,
     )
-    if delivery:
+    if delivery and settings.smtp_host:
         background_tasks.add_task(_send_email, *delivery)
     await asyncio.sleep(max(0, 0.2 - (time.monotonic() - started)))
-    return Message(message="Se o e-mail estiver autorizado, você receberá um link de acesso.")
+    return Message(
+        message="Se o e-mail estiver autorizado, você receberá um link de acesso.",
+        dev_link=(
+            delivery[1]
+            if delivery and settings.app_env == "development" and not settings.smtp_host
+            else None
+        ),
+    )
 
 
 @router.get("/callback", response_model=None)
@@ -201,7 +223,13 @@ async def auth_callback(
 async def logout(auth: CurrentAuth, db: DbSession, response: Response) -> Message:
     auth.session.revoked_at = datetime.now(UTC)
     await db.commit()
-    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        httponly=True,
+        secure=settings.secure_cookies,
+        samesite="lax",
+    )
     return Message(message="Sessão encerrada.")
 
 

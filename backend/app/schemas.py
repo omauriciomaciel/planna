@@ -1,16 +1,20 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
 
 class MagicLinkRequest(BaseModel):
     email: EmailStr
+    privacy_accepted: Literal[True]
+    ai_consent: bool = False
 
 
 class Message(BaseModel):
     message: str
+    dev_link: str | None = None
 
 
 class MemberRead(BaseModel):
@@ -35,6 +39,17 @@ class MeRead(BaseModel):
 
 class HealthRead(BaseModel):
     status: str
+
+
+class OperationsMetricsRead(BaseModel):
+    period_days: int
+    sync_items: int
+    sync_errors: int
+    last_sync_at: datetime | None
+    ai_runs: int
+    ai_prompt_tokens: int
+    ai_completion_tokens: int
+    ai_cost_estimate: Decimal
 
 
 class PluggyConnectTokenRead(BaseModel):

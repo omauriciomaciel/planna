@@ -13,6 +13,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
+RUN useradd --create-home --uid 10001 planna
+USER planna
+
 EXPOSE 8010
 
-CMD ["uv", "run", "--frozen", "--no-dev", "fastapi", "dev", "--host", "0.0.0.0", "--port", "8010"]
+CMD ["uv", "run", "--frozen", "--no-dev", "fastapi", "run", "--host", "0.0.0.0", "--port", "8010"]

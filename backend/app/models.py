@@ -32,6 +32,9 @@ class User(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
+    privacy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    privacy_version: Mapped[str | None] = mapped_column(String(16))
+    ai_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     memberships: Mapped[list["HouseholdMember"]] = relationship(back_populates="user")
 
