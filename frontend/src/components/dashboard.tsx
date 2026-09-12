@@ -16,6 +16,7 @@ import {
   ReceiptText,
   RefreshCw,
   Search,
+  Sparkles,
   UsersRound,
   WalletCards,
 } from "lucide-react";
@@ -42,6 +43,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { InvoiceCapture, InvoiceIngestResult } from "@/components/invoice-capture";
+import { InsightsPanel } from "@/components/insights-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WealthPanel } from "@/components/wealth-panel";
 import { api } from "@/api";
@@ -105,7 +107,7 @@ type Transaction = {
 };
 type TransactionPage = { items: Transaction[]; next_cursor: string | null };
 type Preset = "month" | "quarter" | "year" | "custom";
-type DashboardView = "overview" | "transactions" | "wealth" | "invoices";
+type DashboardView = "overview" | "transactions" | "insights" | "wealth" | "invoices";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
@@ -114,6 +116,7 @@ const selectClass = "h-12 w-full rounded-xl border border-border bg-input/45 px-
 const navigationItems = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
   { id: "transactions", label: "Movimentações", icon: WalletCards },
+  { id: "insights", label: "Insights", icon: Sparkles },
   { id: "wealth", label: "Patrimônio", icon: ChartNoAxesCombined },
   { id: "invoices", label: "Notas fiscais", icon: ReceiptText },
 ] as const;
@@ -125,6 +128,10 @@ const viewDetails: Record<DashboardView, { title: string; description: string }>
   transactions: {
     title: "Movimentações",
     description: "Busque, filtre e categorize o extrato compartilhado da casa.",
+  },
+  insights: {
+    title: "Leitura financeira",
+    description: "Entenda o que saiu do padrão e qual ação pode ter mais impacto agora.",
   },
   wealth: {
     title: "Patrimônio",
@@ -664,6 +671,8 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
           {activeView === "wealth" && (
             <WealthPanel members={me.household.members} onChanged={load} refreshKey={lastSync ?? ""} />
           )}
+
+          {activeView === "insights" && <InsightsPanel />}
 
           {activeView === "invoices" && (
             <div className="max-w-2xl">
