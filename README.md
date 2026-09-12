@@ -52,6 +52,26 @@ No painel autenticado, cole o link da NFC-e de Alagoas ou fotografe o QR code. A
 
 Configure `OPENAI_API_KEY` no `backend/.env` para usar a OpenAI na redação e priorização dos insights. Sem a chave, os mesmos sinais e recomendações são gerados localmente. A análise usa os 12 meses completos mais recentes, renova o cache no primeiro acesso de cada mês e pode ser recalculada pelo painel.
 
+O envio à OpenAI também depende do consentimento de todos os membros. O payload contém somente sinais calculados e seu contexto mínimo; sem consentimento, o cálculo local continua disponível.
+
+## Endurecimento e operação
+
+Em produção, use URLs HTTPS em `FRONTEND_URL` e `PUBLIC_API_URL`, ajuste `TRUSTED_HOSTS` para o domínio público e gere um `METRICS_TOKEN` aleatório com pelo menos 32 caracteres. A API oferece:
+
+- `GET /health` para liveness;
+- `GET /ready` para readiness com verificação do PostgreSQL;
+- `GET /operations/metrics?days=30`, protegido pelo header `X-Metrics-Token`, para estado do sync e uso/custo de IA.
+
+Os logs saem em JSON, com identificador e duração por request, sem query string, e-mail ou valores financeiros. O navegador mantém uma cópia offline por usuário dos GETs autenticados; uma troca de usuário ou logout remove a cópia anterior.
+
+Para iniciar o backup diário com retenção padrão de 30 dias:
+
+```bash
+docker compose --profile production up -d postgres backup
+```
+
+Os dumps ficam em `backups/`. Em produção, armazene esse diretório em disco criptografado e teste periodicamente a restauração com `pg_restore --clean --if-exists --dbname <destino> backups/<arquivo>.dump`.
+
 ## Verificar
 
 ```bash

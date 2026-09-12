@@ -18,6 +18,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  backup:
+    image: postgres:17-alpine
+    profiles: ["production"]
+    command: ["/bin/sh", "/opt/planna/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: planna
+      PGUSER: planna
+      PGPASSWORD: planna
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./ops/backup.sh:/opt/planna/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   postgres:
     image: postgres:17-alpine
