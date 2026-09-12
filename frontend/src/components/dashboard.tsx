@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -471,7 +472,15 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
           {syncing ? "Sincronizando…" : "Atualizar dados"}
         </Button>
         <div className="flex items-center justify-between">
-          <ThemeToggle />
+          <div className="flex items-center">
+            <ThemeToggle />
+            <Link
+              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              href="/privacidade"
+            >
+              Privacidade
+            </Link>
+          </div>
           <Button disabled={pendingLogout} onClick={onLogout} variant="ghost">
             <LogOut data-icon="inline-start" />
             Sair

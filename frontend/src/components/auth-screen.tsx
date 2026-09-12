@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Dashboard } from "@/components/dashboard";
+import { clearPrivateOfflineData } from "@/components/pwa-registration";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 type Member = {
@@ -44,6 +46,7 @@ export function AuthScreen() {
   const [view, setView] = useState<View>("checking");
   const [me, setMe] = useState<Me | null>(null);
   const [pending, setPending] = useState(false);
+  const [devLink, setDevLink] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -73,9 +76,16 @@ export function AuthScreen() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.get("email") }),
+        body: JSON.stringify({
+          email: form.get("email"),
+          privacy_accepted: form.get("privacy") === "on",
+          ai_consent: form.get("ai-consent") === "on",
+        }),
       });
-      setView(response.ok ? "requested" : "error");
+      if (!response.ok) throw new Error("magic-link");
+      const data = (await response.json()) as { dev_link?: string | null };
+      setDevLink(data.dev_link ?? "");
+      setView("requested");
     } catch {
       setView("error");
     } finally {
@@ -91,6 +101,7 @@ export function AuthScreen() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("logout");
+      clearPrivateOfflineData();
       setMe(null);
       setView("guest");
     } catch {
@@ -164,9 +175,19 @@ export function AuthScreen() {
             </CardHeader>
             <CardContent>
               {view === "requested" ? (
-                <Button className="w-full" onClick={() => setView("guest")} variant="outline">
-                  Usar outro e-mail
-                </Button>
+                <div className="flex flex-col gap-3">
+                  {devLink && (
+                    <Link
+                      className="text-center text-sm font-medium text-foreground underline underline-offset-4"
+                      href={devLink}
+                    >
+                      Abrir link de desenvolvimento
+                    </Link>
+                  )}
+                  <Button className="w-full" onClick={() => setView("guest")} variant="outline">
+                    Usar outro e-mail
+                  </Button>
+                </div>
               ) : (
                 <form onSubmit={requestLink}>
                   <FieldGroup>
@@ -187,6 +208,36 @@ export function AuthScreen() {
                           : "O link expira em 15 minutos e só pode ser usado uma vez."}
                       </FieldDescription>
                     </Field>
+                    <div className="flex items-start gap-3 text-sm leading-[1.4]">
+                      <input
+                        className="mt-0.5 size-4 shrink-0 accent-primary"
+                        id="privacy"
+                        name="privacy"
+                        required
+                        type="checkbox"
+                      />
+                      <label htmlFor="privacy">
+                        Li o aviso de privacidade.{" "}
+                        <Link
+                          className="font-medium text-foreground underline underline-offset-4"
+                          href="/privacidade"
+                        >
+                          Ver aviso
+                        </Link>
+                      </label>
+                    </div>
+                    <div className="flex items-start gap-3 text-sm leading-[1.4] text-muted-foreground">
+                      <input
+                        className="mt-0.5 size-4 shrink-0 accent-primary"
+                        id="ai-consent"
+                        name="ai-consent"
+                        type="checkbox"
+                      />
+                      <label htmlFor="ai-consent">
+                        Autorizo o envio de sinais financeiros resumidos à OpenAI. Sem esta
+                        autorização, os insights continuam sendo calculados localmente.
+                      </label>
+                    </div>
                     <Button className="w-full" disabled={pending} type="submit">
                       {pending ? "Enviando…" : "Enviar link de acesso"}
                     </Button>

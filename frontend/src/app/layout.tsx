@@ -7,8 +7,16 @@ import "./globals.css";
 const themeScript = `(function(){try{var t=localStorage.getItem("planna-theme");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
 
 export const metadata: Metadata = {
+  applicationName: "Planna",
   title: "Planna",
   description: "Painel financeiro doméstico compartilhado.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Planna",
+  },
+  icons: { apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
