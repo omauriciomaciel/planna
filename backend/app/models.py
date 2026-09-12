@@ -346,3 +346,44 @@ class NetWorthSnapshot(TimestampMixin, Base):
     net_worth: Mapped[Decimal] = mapped_column(Numeric(18, 2))
     debt_ratio: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     savings_rate: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+
+
+class Insight(Base):
+    __tablename__ = "insights"
+    __table_args__ = (
+        CheckConstraint(
+            "severity IN ('info', 'warning', 'critical')", name="ck_insight_severity"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    type: Mapped[str] = mapped_column(String(40))
+    severity: Mapped[str] = mapped_column(String(16))
+    ref_period: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(160))
+    body: Mapped[str] = mapped_column(String(1000))
+    payload: Mapped[dict] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String(80))
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AIRun(Base):
+    __tablename__ = "ai_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    purpose: Mapped[str] = mapped_column(String(80))
+    prompt_tokens: Mapped[int] = mapped_column(default=0)
+    completion_tokens: Mapped[int] = mapped_column(default=0)
+    cost_estimate: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )

@@ -1,7 +1,8 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     pluggy_client_secret: str | None = None
     pluggy_webhook_url: str | None = None
     pluggy_webhook_secret: str | None = Field(default=None, min_length=32)
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-5-mini"
+    openai_input_cost_per_million: Decimal = Decimal(0)
+    openai_output_cost_per_million: Decimal = Decimal(0)
 
     @property
     def secure_cookies(self) -> bool:

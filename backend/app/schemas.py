@@ -297,3 +297,20 @@ class NetWorthHistoryRead(BaseModel):
 class ValueHistoryRead(BaseModel):
     recorded_at: datetime
     value: Decimal
+
+
+class InsightActionRead(BaseModel):
+    description: str
+    estimated_impact: Decimal | None
+
+
+class InsightRead(BaseModel):
+    id: uuid.UUID
+    type: str
+    severity: str
+    ref_period: str
+    title: str
+    body: str
+    actions: list[InsightActionRead] = Field(default_factory=list)
+    model: str
+    generated_at: datetime
