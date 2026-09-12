@@ -48,6 +48,10 @@ Preencha `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` no `backend/.env`. Para rec
 
 No painel autenticado, cole o link da NFC-e de Alagoas ou fotografe o QR code. A API persiste a nota e seus itens, evita duplicidade pela chave de acesso e procura uma transação Pluggy de mesmo valor entre a emissão e os dois dias seguintes. Sem correspondência, a compra entra no extrato e nos indicadores como vale-alimentação.
 
+## Insights financeiros
+
+Configure `OPENAI_API_KEY` no `backend/.env` para usar a OpenAI na redação e priorização dos insights. Sem a chave, os mesmos sinais e recomendações são gerados localmente. A análise usa os 12 meses completos mais recentes, renova o cache no primeiro acesso de cada mês e pode ser recalculada pelo painel.
+
 ## Verificar
 
 ```bash
