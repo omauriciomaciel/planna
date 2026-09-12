@@ -85,6 +85,16 @@ class PluggyClient:
                 return results
             params["after"] = after[0]
 
+    async def investments(self, item_id: str) -> list[dict[str, Any]]:
+        data = await self.request(
+            "GET", "/investments", params={"itemId": item_id, "pageSize": 500}
+        )
+        return data.get("results", [])
+
+    async def loans(self, item_id: str) -> list[dict[str, Any]]:
+        data = await self.request("GET", "/loans", params={"itemId": item_id, "pageSize": 500})
+        return data.get("results", [])
+
 
 def transaction_values(data: dict[str, Any]) -> dict[str, Any]:
     transaction_type = str(data.get("type", "DEBIT")).lower()

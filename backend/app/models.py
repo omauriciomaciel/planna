@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -242,3 +242,107 @@ class Transaction(TimestampMixin, Base):
     installment_total: Mapped[int | None]
     source: Mapped[str] = mapped_column(String(16), default="pluggy")
     raw: Mapped[dict] = mapped_column(JSON)
+
+
+class Asset(TimestampMixin, Base):
+    __tablename__ = "assets"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('cash', 'investment', 'real_estate', 'pension')",
+            name="ck_asset_type",
+        ),
+        CheckConstraint("source IN ('manual', 'pluggy')", name="ck_asset_source"),
+        CheckConstraint("current_value >= 0", name="ck_asset_current_value"),
+        UniqueConstraint("source", "external_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    type: Mapped[str] = mapped_column(String(24))
+    name: Mapped[str] = mapped_column(String(160))
+    current_value: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+    external_ref: Mapped[str | None] = mapped_column(String(100))
+    valued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Liability(TimestampMixin, Base):
+    __tablename__ = "liabilities"
+    __table_args__ = (
+        CheckConstraint("type IN ('financing', 'credit_card', 'loan')", name="ck_liability_type"),
+        CheckConstraint("source IN ('manual', 'pluggy')", name="ck_liability_source"),
+        CheckConstraint("current_balance >= 0", name="ck_liability_current_balance"),
+        CheckConstraint(
+            "original_amount IS NULL OR original_amount >= 0",
+            name="ck_liability_original_amount",
+        ),
+        CheckConstraint(
+            "interest_rate IS NULL OR interest_rate >= 0", name="ck_liability_interest_rate"
+        ),
+        CheckConstraint(
+            "monthly_payment IS NULL OR monthly_payment >= 0",
+            name="ck_liability_monthly_payment",
+        ),
+        CheckConstraint("due_day IS NULL OR due_day BETWEEN 1 AND 31", name="ck_liability_due_day"),
+        UniqueConstraint("source", "external_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    type: Mapped[str] = mapped_column(String(24))
+    name: Mapped[str] = mapped_column(String(160))
+    current_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    original_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    interest_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    monthly_payment: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    due_day: Mapped[int | None]
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+    external_ref: Mapped[str | None] = mapped_column(String(100))
+
+
+class AssetValueHistory(Base):
+    __tablename__ = "asset_value_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), index=True
+    )
+    value: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
+class LiabilityValueHistory(Base):
+    __tablename__ = "liability_value_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    liability_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("liabilities.id", ondelete="CASCADE"), index=True
+    )
+    balance: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
+class NetWorthSnapshot(TimestampMixin, Base):
+    __tablename__ = "net_worth_snapshots"
+    __table_args__ = (UniqueConstraint("household_id", "ref_month"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    household_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("households.id", ondelete="CASCADE"), index=True
+    )
+    ref_month: Mapped[date] = mapped_column(index=True)
+    total_assets: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    total_liabilities: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    net_worth: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    debt_ratio: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    savings_rate: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))

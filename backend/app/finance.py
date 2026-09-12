@@ -22,6 +22,7 @@ from app.models import (
     HouseholdMember,
     Invoice,
     InvoiceItem,
+    NetWorthSnapshot,
     PluggyItem,
     Transaction,
     User,
@@ -45,6 +46,7 @@ from app.schemas import (
     TransactionRead,
     TrendRead,
 )
+from app.wealth import record_snapshot, sync_pluggy_wealth
 
 router = APIRouter(tags=["finance"])
 
@@ -179,8 +181,10 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
             transaction.category_id = category.id if category else None
             transaction_count += 1
         db.add(AccountBalanceSnapshot(account_id=account.id, balance=account.balance))
+    await sync_pluggy_wealth(db, item)
     item.last_synced_at = datetime.now(UTC)
     await reconcile_unmatched_invoices(db, item.household_id)
+    await record_snapshot(db, item.household_id)
     await db.commit()
     return SyncRead(items=1, accounts=account_count, transactions=transaction_count)
 
@@ -521,6 +525,17 @@ async def _totals(db: AsyncSession, household_id: uuid.UUID, start: date, end: d
 async def _net_worth_at(
     db: AsyncSession, household_id: uuid.UUID, end: date
 ) -> Decimal | None:
+    snapshot = await db.scalar(
+        select(NetWorthSnapshot.net_worth)
+        .where(
+            NetWorthSnapshot.household_id == household_id,
+            NetWorthSnapshot.ref_month <= end.replace(day=1),
+        )
+        .order_by(NetWorthSnapshot.ref_month.desc())
+        .limit(1)
+    )
+    if snapshot is not None:
+        return Decimal(snapshot)
     cutoff = datetime.combine(end + timedelta(days=1), time.min, UTC)
     latest = (
         select(

@@ -178,3 +178,122 @@ class InvoiceRead(BaseModel):
 class InvoiceIngestRead(BaseModel):
     invoice: InvoiceRead
     created: bool
+
+
+class AssetCreate(BaseModel):
+    member_id: uuid.UUID | None = None
+    type: str = Field(pattern="^(cash|investment|real_estate|pension)$")
+    name: str = Field(min_length=1, max_length=160)
+    current_value: Decimal = Field(ge=0, max_digits=18, decimal_places=2)
+    valued_at: datetime | None = None
+
+
+class AssetUpdate(BaseModel):
+    member_id: uuid.UUID | None = None
+    type: str | None = Field(default=None, pattern="^(cash|investment|real_estate|pension)$")
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    current_value: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    valued_at: datetime | None = None
+
+
+class AssetRead(BaseModel):
+    id: uuid.UUID
+    member_id: uuid.UUID
+    member_name: str
+    type: str
+    name: str
+    current_value: Decimal
+    source: str
+    valued_at: datetime
+
+
+class LiabilityCreate(BaseModel):
+    member_id: uuid.UUID | None = None
+    type: str = Field(pattern="^(financing|credit_card|loan)$")
+    name: str = Field(min_length=1, max_length=160)
+    current_balance: Decimal = Field(ge=0, max_digits=18, decimal_places=2)
+    original_amount: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    interest_rate: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=4)
+    monthly_payment: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    due_day: int | None = Field(default=None, ge=1, le=31)
+
+
+class LiabilityUpdate(BaseModel):
+    member_id: uuid.UUID | None = None
+    type: str | None = Field(default=None, pattern="^(financing|credit_card|loan)$")
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    current_balance: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    original_amount: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    interest_rate: Decimal | None = Field(default=None, ge=0, max_digits=10, decimal_places=4)
+    monthly_payment: Decimal | None = Field(default=None, ge=0, max_digits=18, decimal_places=2)
+    due_day: int | None = Field(default=None, ge=1, le=31)
+
+
+class LiabilityRead(BaseModel):
+    id: uuid.UUID
+    member_id: uuid.UUID
+    member_name: str
+    type: str
+    name: str
+    current_balance: Decimal
+    original_amount: Decimal | None
+    interest_rate: Decimal | None
+    monthly_payment: Decimal | None
+    due_day: int | None
+    source: str
+
+
+class WealthAssetRead(BaseModel):
+    id: str
+    member_id: uuid.UUID
+    member_name: str
+    type: str
+    name: str
+    value: Decimal
+    source: str
+    valued_at: datetime | None
+    editable: bool
+
+
+class WealthLiabilityRead(BaseModel):
+    id: str
+    member_id: uuid.UUID
+    member_name: str
+    type: str
+    name: str
+    balance: Decimal
+    monthly_payment: Decimal | None
+    source: str
+    editable: bool
+
+
+class AllocationRead(BaseModel):
+    type: str
+    value: Decimal
+
+
+class NetWorthRead(BaseModel):
+    total_assets: Decimal
+    total_liabilities: Decimal
+    net_worth: Decimal
+    debt_ratio: float | None
+    income_commitment: float | None
+    savings_rate: float | None
+    monthly_income: Decimal
+    monthly_expense: Decimal
+    monthly_debt_payments: Decimal
+    assets: list[WealthAssetRead]
+    liabilities: list[WealthLiabilityRead]
+    allocation: list[AllocationRead]
+
+
+class NetWorthHistoryRead(BaseModel):
+    month: date
+    total_assets: Decimal
+    total_liabilities: Decimal
+    net_worth: Decimal
+
+
+class ValueHistoryRead(BaseModel):
+    recorded_at: datetime
+    value: Decimal
