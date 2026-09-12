@@ -5,11 +5,15 @@ import dynamic from "next/dynamic";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChartNoAxesCombined,
   ChevronDown,
   ChevronUp,
   House,
   Landmark,
+  LayoutDashboard,
   LogOut,
+  Menu,
+  ReceiptText,
   RefreshCw,
   Search,
   UsersRound,
@@ -29,6 +33,14 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { InvoiceCapture, InvoiceIngestResult } from "@/components/invoice-capture";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WealthPanel } from "@/components/wealth-panel";
@@ -93,11 +105,36 @@ type Transaction = {
 };
 type TransactionPage = { items: Transaction[]; next_cursor: string | null };
 type Preset = "month" | "quarter" | "year" | "custom";
+type DashboardView = "overview" | "transactions" | "wealth" | "invoices";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
 const monthName = new Intl.DateTimeFormat("pt-BR", { month: "short" });
 const selectClass = "h-12 w-full rounded-xl border border-border bg-input/45 px-4 text-sm outline-none transition-[background-color,border-color,box-shadow] focus:border-ring focus:bg-card focus:ring-3 focus:ring-ring/20";
+const navigationItems = [
+  { id: "overview", label: "Visão geral", icon: LayoutDashboard },
+  { id: "transactions", label: "Movimentações", icon: WalletCards },
+  { id: "wealth", label: "Patrimônio", icon: ChartNoAxesCombined },
+  { id: "invoices", label: "Notas fiscais", icon: ReceiptText },
+] as const;
+const viewDetails: Record<DashboardView, { title: string; description: string }> = {
+  overview: {
+    title: "Visão da casa",
+    description: "O resumo financeiro do período, sem perder o fio da meada.",
+  },
+  transactions: {
+    title: "Movimentações",
+    description: "Busque, filtre e categorize o extrato compartilhado da casa.",
+  },
+  wealth: {
+    title: "Patrimônio",
+    description: "Acompanhe ativos, dívidas e a evolução do que vocês construíram.",
+  },
+  invoices: {
+    title: "Notas fiscais",
+    description: "Importe uma NFC-e e concilie a compra com a movimentação bancária.",
+  },
+};
 
 function iso(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -211,6 +248,8 @@ function ExpenseChart({ values }: { values: Expense[] }) {
 
 export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: () => void; pendingLogout: boolean }) {
   const initial = presetDates("month");
+  const [activeView, setActiveView] = useState<DashboardView>("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [preset, setPreset] = useState<Preset>("month");
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -368,171 +407,271 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     ? latest
     : !latest || item.last_synced_at > latest ? item.last_synced_at : latest, null);
 
-  return (
-    <main className="min-h-svh bg-background">
-      <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-6 px-4 py-5 sm:px-8 sm:py-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-full bg-primary text-lg font-bold text-primary-foreground shadow-sm shadow-primary/25">P</span>
-          <div>
-            <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">Planna · {me.household.name}</p>
-            <h1 className="text-xl font-semibold tracking-[-0.025em] sm:text-2xl">Visão da casa</h1>
-          </div>
+  function navigate(view: DashboardView) {
+    setActiveView(view);
+    setMenuOpen(false);
+  }
+
+  const navigation = (
+    <div className="flex h-full w-full flex-col">
+      <div className="flex items-center gap-3 px-5 py-6">
+        <span className="grid size-11 place-items-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+          P
+        </span>
+        <div className="min-w-0 pr-8">
+          <p className="text-sm font-semibold tracking-[0.08em] uppercase">Planna</p>
+          <p className="truncate text-xs text-muted-foreground">{me.household.name}</p>
         </div>
-        <div className="flex flex-wrap gap-1 sm:gap-2">
-          <Button className="px-4 sm:px-5" disabled={syncing} onClick={connect}><Landmark data-icon="inline-start" /><span className="hidden sm:inline">Conectar instituição</span><span className="sm:hidden">Conectar</span></Button>
-          <Button className="px-4 sm:px-5" disabled={syncing || !accounts.length} onClick={sync} variant="outline"><RefreshCw data-icon="inline-start" />{syncing ? "Sincronizando…" : "Atualizar"}</Button>
-          <ThemeToggle />
-          <Button aria-label="Sair" className="size-11" disabled={pendingLogout} onClick={onLogout} size="icon-lg" variant="ghost"><LogOut /></Button>
-        </div>
-      </header>
-
-      {connectToken && (
-        <PluggyConnect
-          connectToken={connectToken}
-          includeSandbox={process.env.NODE_ENV !== "production"}
-          onClose={() => setConnectToken("")}
-          onError={() => setError("A conexão com a instituição não foi concluída.")}
-          onSuccess={connected}
-        />
-      )}
-
-      <Card size="sm">
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <Field className="min-w-44 flex-1 sm:max-w-52">
-            <FieldLabel htmlFor="period">Período</FieldLabel>
-            <select className={selectClass} id="period" onChange={(event) => choosePreset(event.target.value as Preset)} value={preset}>
-              <option value="month">Este mês</option>
-              <option value="quarter">Este trimestre</option>
-              <option value="year">Este ano</option>
-              <option value="custom">Personalizado</option>
-            </select>
-          </Field>
-          {preset === "custom" && <>
-            <Field className="min-w-40 flex-1 sm:max-w-48"><FieldLabel htmlFor="date-from">De</FieldLabel><Input id="date-from" max={to} onChange={(event) => setFrom(event.target.value)} type="date" value={from} /></Field>
-            <Field className="min-w-40 flex-1 sm:max-w-48"><FieldLabel htmlFor="date-to">Até</FieldLabel><Input id="date-to" min={from} onChange={(event) => setTo(event.target.value)} type="date" value={to} /></Field>
-          </>}
-          <p className="w-full text-xs text-muted-foreground sm:ml-auto sm:w-auto sm:self-center">
-            {lastSync ? `Atualizado em ${new Date(lastSync).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}` : "Nenhuma conta sincronizada"}
-          </p>
-        </CardContent>
-      </Card>
-
-      {error && <p aria-live="polite" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
-
-      {loading || !kpis ? (
-        <Card><CardHeader><CardTitle>Organizando seus números…</CardTitle><CardDescription>Receitas, despesas e contas estão sendo consolidadas.</CardDescription></CardHeader></Card>
-      ) : <>
-        <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]" aria-label="Resumo financeiro">
-          <Card className="border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/15">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4">
-                <CardDescription className="text-primary-foreground">Patrimônio da casa</CardDescription>
-                <span className="grid size-10 place-items-center rounded-full bg-primary-foreground/12"><House className="size-5" aria-hidden="true" /></span>
-              </div>
-              <CardTitle className="text-4xl font-semibold tracking-[-0.045em] tabular-nums sm:text-5xl">
-                {money.format(Number(kpis.net_worth.value))}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="mt-auto grid gap-4 border-t border-primary-foreground/15 pt-5 sm:grid-cols-2">
-              <div>
-                <p className="text-xs text-primary-foreground">Contas conectadas</p>
-                <p className="mt-1 font-semibold tabular-nums">{accounts.length}</p>
-              </div>
-              <div>
-                <p className="flex items-center gap-1.5 text-xs text-primary-foreground"><UsersRound className="size-3.5" aria-hidden="true" />Compartilhado com</p>
-                <p className="mt-1 truncate font-semibold">{me.household.members.map((item) => item.name).join(" · ")}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <InvoiceCapture onIngest={ingestInvoice} />
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-3" aria-label="Indicadores financeiros">
-          <KpiCard data={kpis.income} label="Receita" />
-          <KpiCard data={kpis.expense} expense label="Despesa" />
-          <KpiCard data={kpis.balance} label="Saldo do período" />
-        </section>
-
-        <WealthPanel members={me.household.members} onChanged={load} refreshKey={lastSync ?? ""} />
-
-        <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-          <Card><CardHeader><CardTitle>Tendência em 12 meses</CardTitle><CardDescription>Receitas e despesas reconhecidas nas contas conectadas.</CardDescription></CardHeader><CardContent><TrendChart values={trends} /></CardContent></Card>
-          <Card><CardHeader><CardTitle>Para onde foi o dinheiro</CardTitle><CardDescription>Despesas por categoria no período.</CardDescription></CardHeader><CardContent><ExpenseChart values={expenses} /></CardContent></Card>
-        </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Movimentações</CardTitle>
-            <CardDescription>Busque e filtre o extrato compartilhado da casa.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5 px-0">
-            <form className="flex gap-2 px-5" onSubmit={applySearch}>
-              <Input aria-label="Buscar movimentação" onChange={(event) => setSearch(event.target.value)} placeholder="Descrição ou estabelecimento" value={search} />
-              <Button aria-label="Buscar" size="icon-lg" type="submit" variant="outline"><Search /></Button>
-            </form>
-            <div className="grid gap-3 px-5 sm:grid-cols-2 lg:grid-cols-4">
-              <select aria-label="Filtrar por conta" className={selectClass} onChange={(event) => setAccount(event.target.value)} value={account}><option value="">Todas as contas</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.institution_name} · {item.name}</option>)}</select>
-              <select aria-label="Filtrar por membro" className={selectClass} onChange={(event) => setMember(event.target.value)} value={member}><option value="">Todos os membros</option>{me.household.members.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-              <select aria-label="Filtrar por categoria" className={selectClass} onChange={(event) => setCategory(event.target.value)} value={category}><option value="">Todas as categorias</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-              <select aria-label="Filtrar por tipo" className={selectClass} onChange={(event) => setType(event.target.value)} value={type}><option value="">Receitas e despesas</option><option value="credit">Receitas</option><option value="debit">Despesas</option></select>
-            </div>
-            <Separator />
-            {transactions.length ? (
-              <div>
-                <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] gap-4 border-b border-border/70 px-5 pb-3 text-xs font-medium text-muted-foreground md:grid">
-                  <span>Movimentação</span><span>Categoria</span><span>Conta</span><span className="text-right">Valor</span>
-                </div>
-                <ul className="list-none p-0">{transactions.map((item) => {
-                    const expanded = expandedTransaction === item.id;
-                    return (
-                    <li className="grid gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] md:items-center" key={item.id}>
-                      <div className="min-w-0">
-                        <button
-                          aria-expanded={item.invoice_id ? expanded : undefined}
-                          className="flex min-h-11 w-full items-center gap-2 text-left"
-                          disabled={!item.invoice_id}
-                          onClick={() => item.invoice_id && setExpandedTransaction(expanded ? "" : item.id)}
-                          type="button"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="flex flex-wrap items-center gap-2">
-                              <span className="truncate font-medium">{item.merchant_name || item.description}</span>
-                              {item.source === "voucher" && <Badge variant="secondary">Vale-alimentação</Badge>}
-                            </span>
-                            <span className="block truncate text-xs text-muted-foreground">{shortDate.format(new Date(item.date))} · {item.member_name}{item.installment_total ? ` · ${item.installment_current}/${item.installment_total}` : ""}{item.status === "pending" ? " · Pendente" : ""}</span>
-                          </span>
-                          {item.invoice_id && (expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />)}
-                        </button>
-                      </div>
-                      <select aria-label={`Categoria de ${item.description}`} className="h-10 w-full rounded-xl border border-border bg-input/45 px-3 text-xs outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" onChange={(event) => void changeCategory(item.id, event.target.value)} value={item.category_id ?? ""}><option value="">Sem categoria</option>{categories.filter((candidate) => candidate.kind === (item.type === "debit" ? "expense" : "income")).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
-                      <p className="truncate text-sm text-muted-foreground">{item.account_name}</p>
-                      <p className={cn("text-right font-semibold tabular-nums", item.type === "credit" && "text-primary")}>{money.format(Number(item.amount))}</p>
-                    {expanded && (
-                      <div className="rounded-2xl bg-muted/70 p-4 md:col-span-4">
-                          <p className="mb-3 text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">Itens da nota</p>
-                          <ul className="grid list-none gap-2 p-0 sm:grid-cols-2">
-                            {item.invoice_items.map((invoiceItem) => (
-                              <li className="grid grid-cols-[1fr_auto] gap-3 text-sm" key={invoiceItem.id}>
-                                <span>{invoiceItem.description} · {Number(invoiceItem.quantity).toLocaleString("pt-BR")} {invoiceItem.unit ?? "un."}</span>
-                                <span className="tabular-nums">{money.format(Number(invoiceItem.total_price))}</span>
-                              </li>
-                            ))}
-                          </ul>
-                      </div>
-                    )}
-                    </li>
-                  );})}
-                </ul>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 py-12 text-center"><WalletCards className="size-8 text-muted-foreground" aria-hidden="true" /><p className="font-medium">Nenhuma movimentação encontrada</p><p className="max-w-md text-sm text-muted-foreground">Conecte uma instituição ou ajuste os filtros para ver o extrato da casa.</p></div>
-            )}
-            {nextCursor && <Button className="self-center" onClick={() => void loadMore()} variant="outline">Carregar mais</Button>}
-          </CardContent>
-        </Card>
-      </>}
       </div>
+
+      <nav aria-label="Navegação principal" className="px-3">
+        <ul className="flex list-none flex-col gap-1 p-0">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const active = activeView === item.id;
+            return (
+              <li key={item.id}>
+                <Button
+                  aria-current={active ? "page" : undefined}
+                  className="w-full justify-start"
+                  onClick={() => navigate(item.id)}
+                  variant={active ? "secondary" : "ghost"}
+                >
+                  <Icon data-icon="inline-start" />
+                  {item.label}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div className="mt-auto flex flex-col gap-3 p-4">
+        <div className="rounded-xl bg-muted/60 p-3">
+          <p className="text-xs font-medium text-foreground">
+            {accounts.length ? `${accounts.length} ${accounts.length === 1 ? "conta conectada" : "contas conectadas"}` : "Nenhuma conta conectada"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {lastSync ? `Atualizado em ${new Date(lastSync).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}` : "Conecte um banco para começar."}
+          </p>
+        </div>
+        <Button disabled={syncing} onClick={connect}>
+          <Landmark data-icon="inline-start" />
+          Conectar instituição
+        </Button>
+        <Button disabled={syncing || !accounts.length} onClick={sync} variant="outline">
+          <RefreshCw data-icon="inline-start" />
+          {syncing ? "Sincronizando…" : "Atualizar dados"}
+        </Button>
+        <div className="flex items-center justify-between">
+          <ThemeToggle />
+          <Button disabled={pendingLogout} onClick={onLogout} variant="ghost">
+            <LogOut data-icon="inline-start" />
+            Sair
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <main className="min-h-svh bg-background md:grid md:grid-cols-[16rem_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-svh border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+        {navigation}
+      </aside>
+
+      <section className="min-w-0">
+        <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm md:static md:border-0 md:bg-transparent md:px-8 md:pt-8 md:pb-0 md:backdrop-blur-none lg:px-10">
+          <div className="md:hidden">
+            <Sheet onOpenChange={setMenuOpen} open={menuOpen}>
+              <SheetTrigger render={<Button aria-label="Abrir menu" size="icon-lg" variant="ghost" />}>
+                <Menu />
+              </SheetTrigger>
+              <SheetContent className="w-[min(20rem,88vw)] gap-0 p-0 md:hidden" side="left">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Menu principal</SheetTitle>
+                  <SheetDescription>Navegue pelas áreas financeiras da casa.</SheetDescription>
+                </SheetHeader>
+                {navigation}
+              </SheetContent>
+            </Sheet>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+              Planna · {me.household.name}
+            </p>
+            <h1 className="truncate text-xl font-semibold tracking-[-0.025em] sm:text-2xl">
+              {viewDetails[activeView].title}
+            </h1>
+          </div>
+        </header>
+
+        {connectToken && (
+          <PluggyConnect
+            connectToken={connectToken}
+            includeSandbox={process.env.NODE_ENV !== "production"}
+            onClose={() => setConnectToken("")}
+            onError={() => setError("A conexão com a instituição não foi concluída.")}
+            onSuccess={connected}
+          />
+        )}
+
+        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-6 px-4 py-6 sm:px-8 md:pt-5 lg:px-10 lg:pb-10">
+          <div className="flex flex-col gap-1">
+            <p className="max-w-[65ch] text-sm text-muted-foreground">
+              {viewDetails[activeView].description}
+            </p>
+          </div>
+
+          {(activeView === "overview" || activeView === "transactions") && (
+            <Card size="sm">
+              <CardContent className="flex flex-wrap items-end gap-3">
+                <Field className="min-w-44 flex-1 sm:max-w-52">
+                  <FieldLabel htmlFor="period">Período</FieldLabel>
+                  <select className={selectClass} id="period" onChange={(event) => choosePreset(event.target.value as Preset)} value={preset}>
+                    <option value="month">Este mês</option>
+                    <option value="quarter">Este trimestre</option>
+                    <option value="year">Este ano</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                </Field>
+                {preset === "custom" && <>
+                  <Field className="min-w-40 flex-1 sm:max-w-48"><FieldLabel htmlFor="date-from">De</FieldLabel><Input id="date-from" max={to} onChange={(event) => setFrom(event.target.value)} type="date" value={from} /></Field>
+                  <Field className="min-w-40 flex-1 sm:max-w-48"><FieldLabel htmlFor="date-to">Até</FieldLabel><Input id="date-to" min={from} onChange={(event) => setTo(event.target.value)} type="date" value={to} /></Field>
+                </>}
+              </CardContent>
+            </Card>
+          )}
+
+          {error && <p aria-live="polite" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
+          {(activeView === "overview" || activeView === "transactions") && (loading || !kpis) ? (
+            <Card><CardHeader><CardTitle>Organizando seus números…</CardTitle><CardDescription>Receitas, despesas e contas estão sendo consolidadas.</CardDescription></CardHeader></Card>
+          ) : null}
+
+          {activeView === "overview" && kpis && (
+            <>
+              <section aria-label="Resumo financeiro">
+                <Card className="border-primary bg-primary text-primary-foreground">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-4">
+                      <CardDescription className="text-primary-foreground">Patrimônio da casa</CardDescription>
+                      <span className="grid size-10 place-items-center rounded-full bg-primary-foreground/12"><House className="size-5" aria-hidden="true" /></span>
+                    </div>
+                    <CardTitle className="text-4xl font-semibold tracking-[-0.045em] tabular-nums sm:text-5xl">
+                      {money.format(Number(kpis.net_worth.value))}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="mt-auto grid gap-4 border-t border-primary-foreground/15 pt-5 sm:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-primary-foreground">Contas conectadas</p>
+                      <p className="mt-1 font-semibold tabular-nums">{accounts.length}</p>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs text-primary-foreground"><UsersRound className="size-3.5" aria-hidden="true" />Compartilhado com</p>
+                      <p className="mt-1 truncate font-semibold">{me.household.members.map((item) => item.name).join(" · ")}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+
+              <section className="grid gap-4 sm:grid-cols-3" aria-label="Indicadores financeiros">
+                <KpiCard data={kpis.income} label="Receita" />
+                <KpiCard data={kpis.expense} expense label="Despesa" />
+                <KpiCard data={kpis.balance} label="Saldo do período" />
+              </section>
+
+              <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+                <Card><CardHeader><CardTitle>Tendência em 12 meses</CardTitle><CardDescription>Receitas e despesas reconhecidas nas contas conectadas.</CardDescription></CardHeader><CardContent><TrendChart values={trends} /></CardContent></Card>
+                <Card><CardHeader><CardTitle>Para onde foi o dinheiro</CardTitle><CardDescription>Despesas por categoria no período.</CardDescription></CardHeader><CardContent><ExpenseChart values={expenses} /></CardContent></Card>
+              </section>
+            </>
+          )}
+
+          {activeView === "transactions" && !loading && kpis && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Extrato da casa</CardTitle>
+                <CardDescription>Use a busca e os filtros para encontrar uma movimentação.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-5 px-0">
+                <form className="flex gap-2 px-5" onSubmit={applySearch}>
+                  <Input aria-label="Buscar movimentação" onChange={(event) => setSearch(event.target.value)} placeholder="Descrição ou estabelecimento" value={search} />
+                  <Button aria-label="Buscar" size="icon-lg" type="submit" variant="outline"><Search /></Button>
+                </form>
+                <div className="grid gap-3 px-5 sm:grid-cols-2 xl:grid-cols-4">
+                  <select aria-label="Filtrar por conta" className={selectClass} onChange={(event) => setAccount(event.target.value)} value={account}><option value="">Todas as contas</option>{accounts.map((item) => <option key={item.id} value={item.id}>{item.institution_name} · {item.name}</option>)}</select>
+                  <select aria-label="Filtrar por membro" className={selectClass} onChange={(event) => setMember(event.target.value)} value={member}><option value="">Todos os membros</option>{me.household.members.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+                  <select aria-label="Filtrar por categoria" className={selectClass} onChange={(event) => setCategory(event.target.value)} value={category}><option value="">Todas as categorias</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+                  <select aria-label="Filtrar por tipo" className={selectClass} onChange={(event) => setType(event.target.value)} value={type}><option value="">Receitas e despesas</option><option value="credit">Receitas</option><option value="debit">Despesas</option></select>
+                </div>
+                <Separator />
+                {transactions.length ? (
+                  <div>
+                    <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] gap-4 border-b border-border/70 px-5 pb-3 text-xs font-medium text-muted-foreground md:grid">
+                      <span>Movimentação</span><span>Categoria</span><span>Conta</span><span className="text-right">Valor</span>
+                    </div>
+                    <ul className="list-none p-0">{transactions.map((item) => {
+                      const expanded = expandedTransaction === item.id;
+                      return (
+                        <li className="grid gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] md:items-center" key={item.id}>
+                          <div className="min-w-0">
+                            <button
+                              aria-expanded={item.invoice_id ? expanded : undefined}
+                              className="flex min-h-11 w-full items-center gap-2 text-left"
+                              disabled={!item.invoice_id}
+                              onClick={() => item.invoice_id && setExpandedTransaction(expanded ? "" : item.id)}
+                              type="button"
+                            >
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="truncate font-medium">{item.merchant_name || item.description}</span>
+                                  {item.source === "voucher" && <Badge variant="secondary">Vale-alimentação</Badge>}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground">{shortDate.format(new Date(item.date))} · {item.member_name}{item.installment_total ? ` · ${item.installment_current}/${item.installment_total}` : ""}{item.status === "pending" ? " · Pendente" : ""}</span>
+                              </span>
+                              {item.invoice_id && (expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />)}
+                            </button>
+                          </div>
+                          <select aria-label={`Categoria de ${item.description}`} className="h-10 w-full rounded-xl border border-border bg-input/45 px-3 text-xs outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" onChange={(event) => void changeCategory(item.id, event.target.value)} value={item.category_id ?? ""}><option value="">Sem categoria</option>{categories.filter((candidate) => candidate.kind === (item.type === "debit" ? "expense" : "income")).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
+                          <p className="truncate text-sm text-muted-foreground">{item.account_name}</p>
+                          <p className={cn("text-right font-semibold tabular-nums", item.type === "credit" && "text-primary")}>{money.format(Number(item.amount))}</p>
+                          {expanded && (
+                            <div className="rounded-2xl bg-muted/70 p-4 md:col-span-4">
+                              <p className="mb-3 text-xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">Itens da nota</p>
+                              <ul className="grid list-none gap-2 p-0 sm:grid-cols-2">
+                                {item.invoice_items.map((invoiceItem) => (
+                                  <li className="grid grid-cols-[1fr_auto] gap-3 text-sm" key={invoiceItem.id}>
+                                    <span>{invoiceItem.description} · {Number(invoiceItem.quantity).toLocaleString("pt-BR")} {invoiceItem.unit ?? "un."}</span>
+                                    <span className="tabular-nums">{money.format(Number(invoiceItem.total_price))}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </li>
+                      );})}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 py-12 text-center"><WalletCards className="size-8 text-muted-foreground" aria-hidden="true" /><p className="font-medium">Nenhuma movimentação encontrada</p><p className="max-w-md text-sm text-muted-foreground">Conecte uma instituição ou ajuste os filtros para ver o extrato da casa.</p></div>
+                )}
+                {nextCursor && <Button className="self-center" onClick={() => void loadMore()} variant="outline">Carregar mais</Button>}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeView === "wealth" && (
+            <WealthPanel members={me.household.members} onChanged={load} refreshKey={lastSync ?? ""} />
+          )}
+
+          {activeView === "invoices" && (
+            <div className="max-w-2xl">
+              <InvoiceCapture onIngest={ingestInvoice} />
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
