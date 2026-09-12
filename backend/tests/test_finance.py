@@ -1,11 +1,15 @@
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
+from app import finance
 from app.finance import decode_cursor, encode_cursor, variation
+from app.models import PluggyItem, Transaction
 from app.pluggy import transaction_values
 
 
@@ -38,3 +42,65 @@ def test_finance_helpers_preserve_money_signs_and_cursor() -> None:
     assert decode_cursor(encode_cursor(timestamp, row_id)) == (timestamp, row_id)
     with pytest.raises(HTTPException):
         decode_cursor("não-é-um-cursor")
+
+
+def test_sync_populates_transaction_before_category_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = PluggyItem(
+        id=uuid.uuid4(),
+        household_id=uuid.uuid4(),
+        member_id=uuid.uuid4(),
+        pluggy_item_id=str(uuid.uuid4()),
+        institution_name="Banco",
+        status="UPDATED",
+    )
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.added: list[object] = []
+
+        async def scalar(self, _query):
+            self.calls += 1
+            if self.calls == 4:
+                transaction = next(row for row in self.added if isinstance(row, Transaction))
+                assert transaction.date is not None
+                assert transaction.amount is not None
+            return item if self.calls == 1 else None
+
+        def add(self, row: object) -> None:
+            if getattr(row, "id", None) is None:
+                row.id = uuid.uuid4()
+            self.added.append(row)
+
+        async def flush(self) -> None:
+            pass
+
+        async def commit(self) -> None:
+            pass
+
+    monkeypatch.setattr(finance.client, "item", AsyncMock(return_value={"id": item.pluggy_item_id}))
+    monkeypatch.setattr(
+        finance.client,
+        "accounts",
+        AsyncMock(return_value=[{"id": str(uuid.uuid4()), "name": "Conta", "balance": 10}]),
+    )
+    monkeypatch.setattr(
+        finance.client,
+        "transactions",
+        AsyncMock(
+            return_value=[
+                {
+                    "id": str(uuid.uuid4()),
+                    "date": "2026-09-12T12:00:00Z",
+                    "amount": 10,
+                    "type": "DEBIT",
+                    "categoryId": "food",
+                    "category": "Alimentação",
+                }
+            ]
+        ),
+    )
+    for name in ("sync_pluggy_wealth", "reconcile_unmatched_invoices", "record_snapshot"):
+        monkeypatch.setattr(finance, name, AsyncMock())
+
+    asyncio.run(finance.sync_one(FakeDb(), item))

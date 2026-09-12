@@ -175,9 +175,9 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
                     pluggy_transaction_id=external_transaction_id,
                 )
                 db.add(transaction)
-            category = await _category(db, raw_transaction)
             for field, value in transaction_values(raw_transaction).items():
                 setattr(transaction, field, value)
+            category = await _category(db, raw_transaction)
             transaction.category_id = category.id if category else None
             transaction_count += 1
         db.add(AccountBalanceSnapshot(account_id=account.id, balance=account.balance))
