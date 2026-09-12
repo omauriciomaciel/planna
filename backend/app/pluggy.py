@@ -55,7 +55,7 @@ class PluggyClient:
         raise AssertionError("unreachable")
 
     async def create_connect_token(self, client_user_id: str) -> str:
-        options: dict[str, Any] = {"clientUserId": client_user_id, "avoidDuplicates": True}
+        options: dict[str, Any] = {"clientUserId": client_user_id}
         if settings.pluggy_webhook_url and settings.pluggy_webhook_secret:
             separator = "&" if "?" in settings.pluggy_webhook_url else "?"
             options["webhookUrl"] = (

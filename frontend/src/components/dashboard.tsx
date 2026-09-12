@@ -527,7 +527,10 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
             connectToken={connectToken}
             includeSandbox={process.env.NODE_ENV !== "production"}
             onClose={() => setConnectToken("")}
-            onError={() => setError("A conexão com a instituição não foi concluída.")}
+            onError={() => {
+              setConnectToken("");
+              setError("A conexão não foi concluída. Se a instituição já estiver conectada, use Atualizar dados.");
+            }}
             onSuccess={connected}
           />
         )}
