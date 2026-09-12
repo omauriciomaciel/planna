@@ -31,6 +31,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { InvoiceCapture, InvoiceIngestResult } from "@/components/invoice-capture";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { WealthPanel } from "@/components/wealth-panel";
+import { api } from "@/api";
 
 const PluggyConnect = dynamic(
   () => import("react-pluggy-connect").then((module) => module.PluggyConnect),
@@ -109,21 +111,6 @@ function presetDates(preset: Preset) {
   if (preset === "quarter") start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1);
   if (preset === "year") start.setMonth(0, 1);
   return { from: iso(start), to: iso(today) };
-}
-
-async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { credentials: "include", ...init });
-  if (!response.ok) {
-    const body = await response.text();
-    try {
-      const detail = JSON.parse(body).detail;
-      throw new Error(typeof detail === "string" ? detail : detail?.[0]?.msg || "Não foi possível concluir a solicitação.");
-    } catch (error) {
-      if (error instanceof SyntaxError) throw new Error("Não foi possível concluir a solicitação.");
-      throw error;
-    }
-  }
-  return response.json();
 }
 
 function queryString(values: Record<string, string>) {
@@ -262,12 +249,12 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     try {
       const period = queryString({ date_from: from, date_to: to });
       const [nextAccounts, nextCategories, nextKpis, nextTrends, nextExpenses, page] = await Promise.all([
-        json<Account[]>("/api/accounts"),
-        json<Category[]>("/api/categories"),
-        json<Kpis>(`/api/analytics/kpis?${period}`),
-        json<Trend[]>(`/api/analytics/trends?${queryString({ date_to: to })}`),
-        json<Expense[]>(`/api/analytics/expenses-by-category?${period}`),
-        json<TransactionPage>(`/api/transactions?${queryString(transactionParams)}`),
+        api<Account[]>("/api/accounts"),
+        api<Category[]>("/api/categories"),
+        api<Kpis>(`/api/analytics/kpis?${period}`),
+        api<Trend[]>(`/api/analytics/trends?${queryString({ date_to: to })}`),
+        api<Expense[]>(`/api/analytics/expenses-by-category?${period}`),
+        api<TransactionPage>(`/api/transactions?${queryString(transactionParams)}`),
       ]);
       setAccounts(nextAccounts);
       setCategories(nextCategories);
@@ -301,7 +288,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     setSyncing(true);
     setError("");
     try {
-      await json("/api/pluggy/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      await api("/api/pluggy/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       await load();
     } catch {
       setError("Não foi possível sincronizar com o Pluggy.");
@@ -314,7 +301,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     setSyncing(true);
     setError("");
     try {
-      const data = await json<{ accessToken: string }>("/api/pluggy/connect-token", { method: "POST" });
+      const data = await api<{ accessToken: string }>("/api/pluggy/connect-token", { method: "POST" });
       setConnectToken(data.accessToken);
     } catch {
       setError("Configure as credenciais Pluggy para conectar uma instituição.");
@@ -327,7 +314,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     setConnectToken("");
     setSyncing(true);
     try {
-      await json("/api/pluggy/items", {
+      await api("/api/pluggy/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_id: data.item.id }),
@@ -342,13 +329,13 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
 
   async function loadMore() {
     if (!nextCursor) return;
-    const page = await json<TransactionPage>(`/api/transactions?${queryString({ ...transactionParams, cursor: nextCursor })}`);
+    const page = await api<TransactionPage>(`/api/transactions?${queryString({ ...transactionParams, cursor: nextCursor })}`);
     setTransactions((current) => [...current, ...page.items]);
     setNextCursor(page.next_cursor);
   }
 
   async function ingestInvoice(url: string): Promise<InvoiceIngestResult> {
-    const result = await json<InvoiceIngestResult>("/api/invoices/ingest", {
+    const result = await api<InvoiceIngestResult>("/api/invoices/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -359,7 +346,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
 
   async function changeCategory(transactionId: string, categoryId: string) {
     try {
-      await json(`/api/transactions/${transactionId}/category`, {
+      await api(`/api/transactions/${transactionId}/category`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: categoryId || null }),
@@ -466,6 +453,8 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
           <KpiCard data={kpis.expense} expense label="Despesa" />
           <KpiCard data={kpis.balance} label="Saldo do período" />
         </section>
+
+        <WealthPanel members={me.household.members} onChanged={load} refreshKey={lastSync ?? ""} />
 
         <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
           <Card><CardHeader><CardTitle>Tendência em 12 meses</CardTitle><CardDescription>Receitas e despesas reconhecidas nas contas conectadas.</CardDescription></CardHeader><CardContent><TrendChart values={trends} /></CardContent></Card>
