@@ -783,13 +783,13 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
                 <Separator />
                 {transactions.length ? (
                   <div>
-                    <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] gap-4 border-b border-border/70 px-5 pb-3 text-xs font-medium text-muted-foreground md:grid">
+                    <div className="hidden grid-cols-[minmax(0,1fr)_12rem_14rem_8rem] gap-4 border-b border-border/70 px-5 pb-3 text-xs font-medium text-muted-foreground md:grid">
                       <span>Movimentação</span><span>Categoria</span><span>Conta</span><span className="text-right">Valor</span>
                     </div>
                     <ul className="list-none p-0">{transactions.map((item) => {
                       const expanded = expandedTransaction === item.id;
                       return (
-                        <li className="grid gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_minmax(10rem,0.7fr)_minmax(9rem,0.7fr)_auto] md:items-center" key={item.id}>
+                        <li className="grid gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_12rem_14rem_8rem] md:items-center" key={item.id}>
                           <div className="min-w-0">
                             <button
                               aria-expanded={item.invoice_id ? expanded : undefined}
@@ -800,15 +800,15 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
                             >
                               <span className="min-w-0 flex-1">
                                 <span className="flex flex-wrap items-center gap-2">
+                                  {item.invoice_id && (expanded ? <ChevronUp className="size-4 shrink-0" aria-hidden="true" /> : <ChevronDown className="size-4 shrink-0" aria-hidden="true" />)}
                                   <span className="truncate font-medium">{item.merchant_name || item.description}</span>
                                   {item.source === "voucher" && <Badge variant="secondary">Vale-alimentação</Badge>}
                                 </span>
                                 <span className="block truncate text-xs text-muted-foreground">{shortDate.format(new Date(item.date))} · {item.member_name}{item.installment_total ? ` · ${item.installment_current}/${item.installment_total}` : ""}{item.status === "pending" ? " · Pendente" : ""}</span>
                               </span>
-                              {item.invoice_id && (expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />)}
                             </button>
                           </div>
-                          <select aria-label={`Categoria de ${item.description}`} className="h-10 w-full rounded-xl border border-border bg-input/45 px-3 text-xs outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" onChange={(event) => void changeCategory(item.id, event.target.value)} value={item.category_id ?? ""}><option value="">Sem categoria</option>{categories.filter((candidate) => candidate.kind === (item.type === "debit" ? "expense" : "income")).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
+                          <select aria-label={`Categoria de ${item.description}`} className="h-10 min-w-0 w-full rounded-xl border border-border bg-input/45 pl-3 pr-8 text-xs outline-none focus:border-ring focus:ring-3 focus:ring-ring/20" onChange={(event) => void changeCategory(item.id, event.target.value)} value={item.category_id ?? ""}><option value="">Sem categoria</option>{categories.filter((candidate) => candidate.kind === (item.type === "debit" ? "expense" : "income")).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
                           <p className="truncate text-sm text-muted-foreground">{item.account_name}</p>
                           <p className={cn("text-right font-semibold tabular-nums", item.type === "credit" && "text-primary")}>{money.format(Number(item.amount))}</p>
                           {expanded && (
