@@ -27,7 +27,6 @@ from app.models import (
     Insight,
     Invoice,
     Liability,
-    PluggyItem,
     Transaction,
     User,
 )
@@ -993,43 +992,9 @@ async def _enrich_insights_background(household_id: uuid.UUID) -> None:
 
 
 @router.get("")
-async def list_insights(
-    auth: CurrentAuth, db: DbSession, background_tasks: BackgroundTasks
-) -> list[InsightRead]:
-    rows = await _cached(db, auth.household.id)
-    current_month = _month(datetime.now(UTC).date())
-    last_run = await db.scalar(
-        select(func.max(AIRun.created_at)).where(
-            AIRun.household_id == auth.household.id,
-            AIRun.purpose == "financial_insights",
-        )
-    )
-    latest_generation = rows[0].generated_at if rows else last_run
-    last_sync = await db.scalar(
-        select(func.max(PluggyItem.last_synced_at)).where(
-            PluggyItem.household_id == auth.household.id
-        )
-    )
-    last_invoice = await db.scalar(
-        select(func.max(Invoice.created_at)).where(Invoice.household_id == auth.household.id)
-    )
-    latest_source = max((value for value in (last_sync, last_invoice) if value), default=None)
-    stale = (
-        latest_generation is None
-        or _month(latest_generation.date()) < current_month
-        or (latest_source is not None and latest_source > latest_generation)
-    )
-    if stale:
-        ai_allowed = await _ai_allowed(db, auth.household.id)
-        rows = await refresh_insights(
-            db,
-            auth.household.id,
-            allow_external_ai=False,
-            pending_ai=ai_allowed,
-        )
-        if ai_allowed:
-            background_tasks.add_task(_enrich_insights_background, auth.household.id)
-    return [_read(row) for row in rows]
+async def list_insights(auth: CurrentAuth, db: DbSession) -> list[InsightRead]:
+    """Read-only: recalculation only happens through the explicit refresh action."""
+    return [_read(row) for row in await _cached(db, auth.household.id)]
 
 
 @router.post("/refresh")

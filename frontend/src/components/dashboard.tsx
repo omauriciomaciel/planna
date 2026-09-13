@@ -751,7 +751,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-2">
                     <div><p className="text-xs text-muted-foreground">Total restante</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(Number(installments.total_remaining))}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Impacto mensal</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(Number(installments.monthly_installment_burden))}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Próxima fatura</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(Number(installments.monthly_installment_burden))}</p></div>
                   </CardContent>
                 </Card>
               )}

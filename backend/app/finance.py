@@ -723,6 +723,33 @@ def _add_months(value: date, amount: int) -> date:
     return target.replace(day=min(value.day, calendar.monthrange(target.year, target.month)[1]))
 
 
+def _dedupe_installments(rows: list[Any]) -> list[Any]:
+    latest: dict[tuple[str, str, int, Decimal], Any] = {}
+    for row in rows:
+        key = (
+            row.merchant_name or row.description,
+            row.description,
+            int(row.installment_total),
+            abs(Decimal(row.amount)),
+        )
+        if key not in latest or int(row.installment_current) > int(latest[key].installment_current):
+            latest[key] = row
+    return list(latest.values())
+
+
+def _bill_forecast_month(raw: dict[str, Any] | None, fallback: date) -> date:
+    value = (raw or {}).get("creditCardMetadata", {}).get("billForecastDate")
+    if value:
+        try:
+            return date.fromisoformat(str(value)[:10]).replace(day=1)
+        except ValueError:
+            try:
+                return date.fromisoformat(str(value)[:7] + "-01")
+            except ValueError:
+                pass
+    return fallback.replace(day=1)
+
+
 @router.get("/analytics/installments-forecast")
 async def installments_forecast(auth: CurrentAuth, db: DbSession) -> InstallmentForecastRead:
     rows = (
@@ -735,32 +762,33 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
                 Category.name,
                 Transaction.amount,
                 Transaction.date,
+                Transaction.type,
+                Transaction.status,
                 Transaction.installment_current,
                 Transaction.installment_total,
+                Transaction.raw,
             )
             .outerjoin(Category, Category.id == Transaction.category_id)
             .outerjoin(Account, Account.id == Transaction.account_id)
             .where(
                 Account.household_id == auth.household.id,
-                Transaction.installment_total > 1,
-                Transaction.installment_current < Transaction.installment_total,
-                Transaction.status == "posted",
+                Transaction.type == "debit",
+                Transaction.status == "pending",
             )
         )
     ).all()
     by_category: dict[tuple[uuid.UUID | None, str], dict[str, Any]] = {}
     by_month: dict[date, Decimal] = {}
     total_remaining = Decimal(0)
-    monthly_burden = Decimal(0)
     for row in rows:
-        current = int(row.installment_current)
-        total = int(row.installment_total)
-        remaining = total - current
         amount = abs(Decimal(row.amount))
-        remaining_total = amount * remaining
-        total_remaining += remaining_total
-        monthly_burden += amount
+        remaining_total = amount
         transaction_date = row.date.date() if isinstance(row.date, datetime) else row.date
+        forecast_month = _bill_forecast_month(row.raw, transaction_date)
+        current = int(row.installment_current or 0)
+        total = int(row.installment_total or 1)
+        remaining = max(total - current, 1)
+        total_remaining += remaining_total
         item = InstallmentForecastItem(
             transaction_id=row.id,
             description=row.description,
@@ -772,7 +800,7 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
             installment_amount=amount,
             remaining_installments=remaining,
             remaining_total=remaining_total,
-            estimated_end_date=_add_months(transaction_date, remaining),
+            estimated_end_date=_add_months(transaction_date, remaining - 1),
         )
         category_key = (row.category_id, row.name or "Sem categoria")
         bucket = by_category.setdefault(
@@ -782,9 +810,8 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
         bucket["remaining_total"] += remaining_total
         bucket["monthly_impact"] += amount
         bucket["items"].append(item)
-        for offset in range(1, remaining + 1):
-            month = _add_months(transaction_date, offset).replace(day=1)
-            by_month[month] = by_month.get(month, Decimal(0)) + amount
+        month = forecast_month
+        by_month[month] = by_month.get(month, Decimal(0)) + amount
     categories = [
         InstallmentsByCategory(
             category_id=category_id,
@@ -797,9 +824,14 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
             by_category.items(), key=lambda entry: entry[1]["remaining_total"], reverse=True
         )
     ]
+    current_month = datetime.now(UTC).date().replace(day=1)
+    next_month = min(
+        (month for month in by_month if month >= current_month),
+        default=current_month,
+    )
     return InstallmentForecastRead(
         total_remaining=total_remaining,
-        monthly_installment_burden=monthly_burden,
+        monthly_installment_burden=by_month.get(next_month, Decimal(0)),
         by_category=categories,
         by_month=[
             MonthlyProjection(month=month, amount=amount)
