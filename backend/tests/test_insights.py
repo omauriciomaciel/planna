@@ -118,3 +118,66 @@ def test_narration_timeout_falls_back_to_local(monkeypatch) -> None:
 
     assert narratives[0].signal_id == "test"
     assert model == "deterministic"
+
+
+def test_narration_consumes_merged_signals(monkeypatch) -> None:
+    class Response:
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            text = NarrativeBundle(
+                insights=[
+                    {
+                        "signal_id": "cost",
+                        "type": "cost_growth",
+                        "severity": "warning",
+                        "ref_period": "2026-09",
+                        "title": "Custos concentrados",
+                        "body": "Mercado explica a alta.",
+                        "actions": [],
+                        "merged_signal_ids": ["market"],
+                    }
+                ]
+            ).model_dump_json()
+            return {
+                "output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]
+            }
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            pass
+
+        async def post(self, *_args, **_kwargs):
+            return Response()
+
+    monkeypatch.setattr(settings, "openai_api_key", SecretStr("test"))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+    signals = [
+        Signal(
+            signal_id="cost",
+            type="cost_growth",
+            severity="warning",
+            ref_period="2026-09",
+            title="Custos",
+            body="Alta",
+            actions=[],
+            evidence={},
+        ),
+        Signal(
+            signal_id="market",
+            type="category_outlier",
+            severity="warning",
+            ref_period="2026-09",
+            title="Mercado",
+            body="Alta",
+            actions=[],
+            evidence={},
+        ),
+    ]
+    narratives, *_ = asyncio.run(_narrate(signals))
+    assert [item.signal_id for item in narratives] == ["cost"]
+    assert narratives[0].merged_signal_ids == ["market"]

@@ -29,7 +29,9 @@ def upgrade() -> None:
         sa.Column("execution_status", sa.String(80)),
         sa.Column("last_synced_at", sa.DateTime(timezone=True)),
         sa.Column("error", sa.String(500)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["household_id"], ["households.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["member_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -48,7 +50,9 @@ def upgrade() -> None:
         sa.Column("icon", sa.String(40)),
         sa.Column("is_system", sa.Boolean(), nullable=False),
         sa.Column("external_id", sa.String(40)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint("kind IN ('expense', 'income')", name="ck_category_kind"),
         sa.ForeignKeyConstraint(["household_id"], ["households.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["parent_id"], ["categories.id"]),
@@ -71,7 +75,9 @@ def upgrade() -> None:
         sa.Column("currency", sa.String(3), nullable=False),
         sa.Column("credit_limit", sa.Numeric(18, 2)),
         sa.Column("due_day", sa.Integer()),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint("type IN ('bank', 'credit', 'investment')", name="ck_account_type"),
         sa.ForeignKeyConstraint(["household_id"], ["households.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["member_id"], ["users.id"], ondelete="CASCADE"),
@@ -98,7 +104,9 @@ def upgrade() -> None:
         sa.Column("installment_total", sa.Integer()),
         sa.Column("source", sa.String(16), nullable=False),
         sa.Column("raw", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint("type IN ('debit', 'credit')", name="ck_transaction_type"),
         sa.CheckConstraint("status IN ('posted', 'pending')", name="ck_transaction_status"),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"], ondelete="CASCADE"),
@@ -109,7 +117,9 @@ def upgrade() -> None:
     op.create_index("ix_transactions_account_id", "transactions", ["account_id"])
     op.create_index("ix_transactions_category_id", "transactions", ["category_id"])
     op.create_index("ix_transactions_date", "transactions", ["date"])
-    op.create_index("ix_transactions_pluggy_transaction_id", "transactions", ["pluggy_transaction_id"])
+    op.create_index(
+        "ix_transactions_pluggy_transaction_id", "transactions", ["pluggy_transaction_id"]
+    )
 
 
 def downgrade() -> None:

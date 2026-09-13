@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.invoices import choose_match
+from app.invoices import _normalize_product, _similarity, choose_match
 from app.sefaz import SefazError, normalize_nfce_url, parse_brl_decimal, parse_nfce_html
 
 ACCESS_KEY = "27260620300157007403651160000125469449142260"
@@ -62,3 +62,9 @@ def test_rejects_non_sefaz_urls_and_resolves_ambiguous_cnpj() -> None:
     match, confidence = choose_match([first, second], "20300157000174")
     assert match is second
     assert confidence == Decimal("1.00")
+
+
+def test_product_similarity_normalizes_accents_and_rejects_different_items() -> None:
+    detergent = _normalize_product("DETERGENTE YPÊ 500 ML")
+    assert _similarity(detergent, _normalize_product("Detergente Ype 500ml")) >= 0.82
+    assert _similarity(detergent, _normalize_product("Coca Cola 2 litros")) < 0.82

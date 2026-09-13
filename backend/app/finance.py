@@ -11,7 +11,6 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.auth import CurrentAuth
 from app.category_translations import translate_category
@@ -94,41 +93,65 @@ def date_bounds(date_from: date | None, date_to: date | None) -> tuple[date, dat
     return start, end
 
 
+def _find_transfer_pairs(rows: list[Any]) -> list[tuple[uuid.UUID, uuid.UUID]]:
+    allowed_debits = {None, "expense", "transfer"}
+    allowed_credits = {None, "other_income", "transfer"}
+    debits = [row for row in rows if row.type == "debit" and row.economic_type in allowed_debits]
+    credits = [row for row in rows if row.type == "credit" and row.economic_type in allowed_credits]
+    candidates: dict[uuid.UUID, list[Any]] = {
+        debit.id: [
+            credit
+            for credit in credits
+            if credit.account_id != debit.account_id
+            and credit.amount == -debit.amount
+            and abs(credit.date - debit.date) <= timedelta(days=1)
+        ]
+        for debit in debits
+    }
+    reverse_count = {
+        credit.id: sum(credit in matches for matches in candidates.values()) for credit in credits
+    }
+    used: set[uuid.UUID] = set()
+    pairs: list[tuple[uuid.UUID, uuid.UUID]] = []
+    for debit in sorted(debits, key=lambda row: (row.date, row.id)):
+        matches = [credit for credit in candidates[debit.id] if credit.id not in used]
+        strong = [
+            credit
+            for credit in matches
+            if debit.economic_type == "transfer" or credit.economic_type == "transfer"
+        ]
+        if strong:
+            matches = strong
+        elif len(matches) != 1 or reverse_count[matches[0].id] != 1:
+            continue
+        credit = min(matches, key=lambda row: abs(row.date - debit.date))
+        used.add(credit.id)
+        pairs.append((debit.id, credit.id))
+    return pairs
+
+
 async def _match_transfer_pairs(db: AsyncSession, household_id: uuid.UUID) -> None:
-    if not hasattr(db, "execute"):
-        return
-    debit = aliased(Transaction)
-    credit = aliased(Transaction)
-    debit_account = aliased(Account)
-    credit_account = aliased(Account)
-    pairs = (
-        await db.execute(
-            select(debit.id, credit.id)
-            .join(debit_account, debit_account.id == debit.account_id)
-            .join(
-                credit,
-                and_(
-                    credit.account_id != debit.account_id,
-                    credit.type == "credit",
-                    credit.status == "posted",
-                    credit.amount == -debit.amount,
-                    credit.date.between(
-                        debit.date - timedelta(days=1), debit.date + timedelta(days=1)
-                    ),
-                ),
+    rows = list(
+        (
+            await db.execute(
+                select(
+                    Transaction.id,
+                    Transaction.account_id,
+                    Transaction.type,
+                    Transaction.amount,
+                    Transaction.date,
+                    Transaction.economic_type,
+                )
+                .join(Account, Account.id == Transaction.account_id)
+                .where(
+                    Account.household_id == household_id,
+                    Transaction.status == "posted",
+                    Transaction.type.in_(("debit", "credit")),
+                )
             )
-            .join(credit_account, credit_account.id == credit.account_id)
-            .where(
-                debit_account.household_id == household_id,
-                credit_account.household_id == household_id,
-                debit.type == "debit",
-                debit.status == "posted",
-                debit.amount < 0,
-                debit.economic_type.is_(None),
-                credit.economic_type.is_(None),
-            )
-        )
-    ).all()
+        ).all()
+    )
+    pairs = _find_transfer_pairs(rows)
     for debit_id, credit_id in pairs:
         await db.execute(
             update(Transaction)
@@ -723,20 +746,6 @@ def _add_months(value: date, amount: int) -> date:
     return target.replace(day=min(value.day, calendar.monthrange(target.year, target.month)[1]))
 
 
-def _dedupe_installments(rows: list[Any]) -> list[Any]:
-    latest: dict[tuple[str, str, int, Decimal], Any] = {}
-    for row in rows:
-        key = (
-            row.merchant_name or row.description,
-            row.description,
-            int(row.installment_total),
-            abs(Decimal(row.amount)),
-        )
-        if key not in latest or int(row.installment_current) > int(latest[key].installment_current):
-            latest[key] = row
-    return list(latest.values())
-
-
 def _bill_forecast_month(raw: dict[str, Any] | None, fallback: date) -> date:
     value = (raw or {}).get("creditCardMetadata", {}).get("billForecastDate")
     if value:
@@ -785,9 +794,9 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
         remaining_total = amount
         transaction_date = row.date.date() if isinstance(row.date, datetime) else row.date
         forecast_month = _bill_forecast_month(row.raw, transaction_date)
-        current = int(row.installment_current or 0)
-        total = int(row.installment_total or 1)
-        remaining = max(total - current, 1)
+        current = int(row.installment_current) if row.installment_current is not None else None
+        total = int(row.installment_total) if row.installment_total is not None else None
+        remaining = max(total - current, 0) if current is not None and total is not None else None
         total_remaining += remaining_total
         item = InstallmentForecastItem(
             transaction_id=row.id,
@@ -800,35 +809,38 @@ async def installments_forecast(auth: CurrentAuth, db: DbSession) -> Installment
             installment_amount=amount,
             remaining_installments=remaining,
             remaining_total=remaining_total,
-            estimated_end_date=_add_months(transaction_date, remaining - 1),
+            bill_forecast_date=forecast_month,
+            estimated_end_date=(_add_months(forecast_month, remaining - 1) if remaining else None),
         )
         category_key = (row.category_id, row.name or "Sem categoria")
         bucket = by_category.setdefault(
             category_key,
-            {"remaining_total": Decimal(0), "monthly_impact": Decimal(0), "items": []},
+            {"remaining_total": Decimal(0), "by_month": {}, "items": []},
         )
         bucket["remaining_total"] += remaining_total
-        bucket["monthly_impact"] += amount
+        bucket["by_month"][forecast_month] = (
+            bucket["by_month"].get(forecast_month, Decimal(0)) + amount
+        )
         bucket["items"].append(item)
         month = forecast_month
         by_month[month] = by_month.get(month, Decimal(0)) + amount
+    current_month = datetime.now(UTC).date().replace(day=1)
+    next_month = min(
+        (month for month in by_month if month >= current_month),
+        default=current_month,
+    )
     categories = [
         InstallmentsByCategory(
             category_id=category_id,
             category_name=category_name,
             remaining_total=values["remaining_total"],
-            monthly_impact=values["monthly_impact"],
+            monthly_impact=values["by_month"].get(next_month, Decimal(0)),
             items=sorted(values["items"], key=lambda item: item.remaining_total, reverse=True),
         )
         for (category_id, category_name), values in sorted(
             by_category.items(), key=lambda entry: entry[1]["remaining_total"], reverse=True
         )
     ]
-    current_month = datetime.now(UTC).date().replace(day=1)
-    next_month = min(
-        (month for month in by_month if month >= current_month),
-        default=current_month,
-    )
     return InstallmentForecastRead(
         total_remaining=total_remaining,
         monthly_installment_burden=by_month.get(next_month, Decimal(0)),

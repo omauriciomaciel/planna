@@ -48,26 +48,43 @@ def test_finance_helpers_preserve_money_signs_and_cursor() -> None:
 def test_installment_month_projection_handles_short_months() -> None:
     assert finance._add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
     assert finance._add_months(date(2026, 11, 30), 2) == date(2027, 1, 30)
+    assert finance._bill_forecast_month(
+        {"creditCardMetadata": {"billForecastDate": "2026-11-15T00:00:00Z"}},
+        date(2026, 9, 1),
+    ) == date(2026, 11, 1)
 
 
-def test_installment_forecast_deduplicates_historical_snapshots() -> None:
+def test_transfer_matching_is_one_to_one_and_skips_ambiguous_pairs() -> None:
     rows = [
         SimpleNamespace(
-            merchant_name="Loja",
-            description="Compra",
-            installment_total=12,
-            amount=Decimal(200),
-            installment_current=3,
+            id=uuid.uuid4(),
+            account_id="a",
+            type="debit",
+            amount=Decimal(-200),
+            date=datetime(2026, 9, 1, 12, tzinfo=UTC),
+            economic_type="expense",
         ),
         SimpleNamespace(
-            merchant_name="Loja",
-            description="Compra",
-            installment_total=12,
+            id=uuid.uuid4(),
+            account_id="b",
+            type="credit",
             amount=Decimal(200),
-            installment_current=4,
+            date=datetime(2026, 9, 1, 12, tzinfo=UTC),
+            economic_type="other_income",
         ),
     ]
-    assert [row.installment_current for row in finance._dedupe_installments(rows)] == [4]
+    assert finance._find_transfer_pairs(rows) == [(rows[0].id, rows[1].id)]
+    rows.append(
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            account_id="c",
+            type="credit",
+            amount=Decimal(200),
+            date=datetime(2026, 9, 1, 13, tzinfo=UTC),
+            economic_type="other_income",
+        )
+    )
+    assert finance._find_transfer_pairs(rows) == []
 
 
 def test_sync_populates_transaction_before_category_query(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -126,7 +143,12 @@ def test_sync_populates_transaction_before_category_query(monkeypatch: pytest.Mo
             ]
         ),
     )
-    for name in ("sync_pluggy_wealth", "reconcile_unmatched_invoices", "record_snapshot"):
+    for name in (
+        "sync_pluggy_wealth",
+        "_match_transfer_pairs",
+        "reconcile_unmatched_invoices",
+        "record_snapshot",
+    ):
         monkeypatch.setattr(finance, name, AsyncMock())
 
     asyncio.run(finance.sync_one(FakeDb(), item))

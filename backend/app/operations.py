@@ -18,8 +18,10 @@ def require_metrics_token(
     token: Annotated[str | None, Header(alias="X-Metrics-Token")] = None,
 ) -> None:
     expected = settings.metrics_token
-    if expected is None or token is None or not secrets.compare_digest(
-        token, expected.get_secret_value()
+    if (
+        expected is None
+        or token is None
+        or not secrets.compare_digest(token, expected.get_secret_value())
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autorizado")
 

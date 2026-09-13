@@ -116,6 +116,7 @@ class Narrative(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     body: str = Field(min_length=1, max_length=1000)
     actions: list[ActionDraft] = Field(max_length=3)
+    merged_signal_ids: list[str]
 
 
 class NarrativeBundle(BaseModel):
@@ -189,8 +190,10 @@ def calculate_signals(
     trend_latest = trend_months[-1]
     trend_period = trend_latest.month.strftime("%Y-%m")
 
-    avg_income = _average([month.income for month in trend_months[-6:]])
-    avg_expense = _average([month.expense for month in trend_months[-6:]])
+    active_months = [month for month in trend_months[-6:] if month.income or month.expense]
+    active_months = active_months or trend_months[-1:]
+    avg_income = _average([month.income for month in active_months])
+    avg_expense = _average([month.expense for month in active_months])
     savings_rate = (avg_income - avg_expense) / avg_income if avg_income else Decimal(0)
     runway = cash_balance / avg_expense if avg_expense else Decimal(99)
     signals.append(
@@ -746,6 +749,7 @@ async def _narrate(
     fallback = [
         Narrative.model_validate(
             signal.model_dump(exclude={"evidence", "confidence", "evidence_summary"})
+            | {"merged_signal_ids": []}
         )
         for signal in signals
     ]
@@ -754,7 +758,7 @@ async def _narrate(
 
     payload = {
         "model": settings.openai_model,
-        "instructions": """Você é o planejador financeiro pessoal do Planna. Analise todos os sinais em conjunto antes de reescrevê-los. Funda sinais correlacionados quando isso tornar o diagnóstico mais útil, preserve o signal_id mais grave e ordene por urgência real. Use o contexto financeiro para calibrar a gravidade, contextualize dezembro, janeiro e julho antes de alertar, e nunca invente fatos. Cada ação deve ser executável nesta semana, com valores concretos e no máximo três por insight. Seja direto, sem alarmismo. Preserve signal_id, type, severity e ref_period. O insight financial_summary deve aparecer primeiro.""",
+        "instructions": """Você é o planejador financeiro pessoal do Planna. Analise todos os sinais em conjunto antes de reescrevê-los. Funda sinais correlacionados quando isso tornar o diagnóstico mais útil: mantenha em signal_id o sinal mais grave e liste os demais em merged_signal_ids. Nunca funda financial-summary com outro sinal e coloque-o primeiro. Use o contexto financeiro para calibrar a gravidade, contextualize dezembro, janeiro e julho antes de alertar, e nunca invente fatos. Cada ação deve ser executável nesta semana, com valores concretos e no máximo três por insight. Seja direto, sem alarmismo. Preserve type, severity e ref_period do signal_id principal.""",
         "input": json.dumps(
             {
                 "context": context or {},
@@ -805,17 +809,27 @@ async def _narrate(
                         "type": signal.type,
                         "severity": signal.severity,
                         "ref_period": signal.ref_period,
+                        "merged_signal_ids": [
+                            signal_id
+                            for signal_id in narrative.merged_signal_ids
+                            if signal_id in known
+                            and signal_id != narrative.signal_id
+                            and known[signal_id].type != "financial_summary"
+                        ],
                     }
                 )
             )
             seen.add(narrative.signal_id)
+            seen.update(ordered[-1].merged_signal_ids)
         ordered.extend(
             Narrative.model_validate(
                 signal.model_dump(exclude={"evidence", "confidence", "evidence_summary"})
+                | {"merged_signal_ids": []}
             )
             for signal in signals
             if signal.signal_id not in seen
         )
+        ordered.sort(key=lambda narrative: narrative.type != "financial_summary")
         usage = result.get("usage") or {}
         return (
             ordered,
@@ -856,12 +870,13 @@ async def _cached(db: AsyncSession, household_id: uuid.UUID) -> list[Insight]:
     priority = case(
         (Insight.severity == "critical", 0), (Insight.severity == "warning", 1), else_=2
     )
+    summary_first = case((Insight.type == "financial_summary", 0), else_=1)
     return list(
         (
             await db.scalars(
                 select(Insight)
                 .where(Insight.household_id == household_id, Insight.dismissed_at.is_(None))
-                .order_by(priority, Insight.generated_at.desc())
+                .order_by(summary_first, priority, Insight.generated_at.desc())
             )
         ).all()
     )
@@ -893,7 +908,7 @@ async def refresh_insights(
         )
     )
     household = await db.get(Household, household_id)
-    recent = months[-6:]
+    recent = [month for month in months[-6:] if month.income or month.expense]
     avg_income = _average([month.income for month in recent]) if recent else Decimal(0)
     avg_expense = _average([month.expense for month in recent]) if recent else Decimal(0)
     narratives, prompt_tokens, completion_tokens, model = await _narrate(
@@ -921,7 +936,7 @@ async def refresh_insights(
     existing_by_signal = {
         row.payload.get("signal_id"): row for row in existing if row.payload.get("signal_id")
     }
-    current_signal_ids = set(signal_by_id)
+    current_signal_ids = {narrative.signal_id for narrative in narratives}
     for old_row in existing:
         if (
             old_row.payload.get("signal_id") not in current_signal_ids
@@ -932,6 +947,11 @@ async def refresh_insights(
     rows: list[Insight] = []
     for narrative in narratives:
         signal = signal_by_id[narrative.signal_id]
+        merged_signals = [
+            signal_by_id[signal_id]
+            for signal_id in narrative.merged_signal_ids
+            if signal_id in signal_by_id
+        ]
         row = existing_by_signal.get(signal.signal_id)
         if row is None:
             row = Insight(household_id=household_id)
@@ -943,10 +963,12 @@ async def refresh_insights(
         row.body = narrative.body
         row.payload = {
             "signal_id": signal.signal_id,
+            "merged_signal_ids": narrative.merged_signal_ids,
             "actions": [action.model_dump(mode="json") for action in narrative.actions],
             "evidence": json.loads(json.dumps(signal.evidence, default=str)),
             "confidence": signal.confidence,
-            "evidence_summary": signal.evidence_summary,
+            "evidence_summary": signal.evidence_summary
+            + [item for merged in merged_signals for item in merged.evidence_summary],
         }
         row.model = "pending-ai" if pending_ai else model
         row.generated_at = datetime.now(UTC)

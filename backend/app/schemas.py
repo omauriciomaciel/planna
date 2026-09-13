@@ -169,12 +169,13 @@ class InstallmentForecastItem(BaseModel):
     merchant_name: str | None
     category_id: uuid.UUID | None
     category_name: str | None
-    installment_current: int
-    installment_total: int
+    installment_current: int | None
+    installment_total: int | None
     installment_amount: Decimal
-    remaining_installments: int
+    remaining_installments: int | None
     remaining_total: Decimal
-    estimated_end_date: date
+    bill_forecast_date: date
+    estimated_end_date: date | None
 
 
 class InstallmentsByCategory(BaseModel):

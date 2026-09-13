@@ -1,5 +1,4 @@
 import json
-import re
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
@@ -10,13 +9,23 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from sqlalchemy import and_, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentAuth
 from app.config import settings
 from app.database import DbSession, SessionLocal
-from app.models import Account, Category, Invoice, InvoiceItem, ProductCategoryCache, Transaction
+from app.economic import normalize_text
+from app.models import (
+    Account,
+    Category,
+    Invoice,
+    InvoiceItem,
+    ProductCategoryCache,
+    Transaction,
+    User,
+)
 from app.schemas import (
     InvoiceIngestRead,
     InvoiceIngestRequest,
@@ -34,6 +43,19 @@ from app.sefaz import (
 )
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+PRODUCT_CATEGORIES = (
+    "Alimentos",
+    "Bebidas",
+    "Limpeza",
+    "Higiene",
+    "Padaria",
+    "Carnes",
+    "Frios",
+    "Hortifruti",
+    "Congelados",
+    "Pet",
+    "Outros",
+)
 
 
 def choose_match(
@@ -62,7 +84,7 @@ def _explicit_voucher(payment_method: str | None) -> bool:
 
 
 def _normalize_product(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    return normalize_text(value)
 
 
 def _similarity(left: str, right: str) -> float:
@@ -75,8 +97,100 @@ def _similarity(left: str, right: str) -> float:
     return 1 - previous[-1] / max(len(left), len(right), 1)
 
 
-async def categorize_invoice_items(db: AsyncSession, items: list[InvoiceItem]) -> None:
-    cached = list((await db.scalars(select(ProductCategoryCache))).all())
+async def _product_categories(db: AsyncSession) -> dict[str, uuid.UUID]:
+    for name in PRODUCT_CATEGORIES:
+        await db.execute(
+            insert(Category)
+            .values(
+                id=uuid.uuid4(),
+                household_id=None,
+                name=name,
+                kind="expense",
+                is_system=True,
+                external_id=f"invoice:{normalize_text(name).replace(' ', '-')}",
+            )
+            .on_conflict_do_nothing(index_elements=[Category.external_id])
+        )
+    rows = (
+        await db.execute(
+            select(Category.name, Category.id).where(Category.external_id.like("invoice:%"))
+        )
+    ).all()
+    return dict(rows)
+
+
+async def _llm_product_categories(items: list[InvoiceItem]) -> dict[int, str]:
+    if not items or settings.openai_api_key is None:
+        return {}
+    schema = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "index": {"type": "integer"},
+                        "category": {"type": "string", "enum": list(PRODUCT_CATEGORIES)},
+                    },
+                    "required": ["index", "category"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+    payload = {
+        "model": settings.openai_model,
+        "instructions": "Classifique cada item de nota fiscal em exatamente uma categoria permitida.",
+        "input": json.dumps(
+            [{"index": index, "description": item.description} for index, item in enumerate(items)],
+            ensure_ascii=False,
+        ),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "invoice_categories",
+                "strict": True,
+                "schema": schema,
+            }
+        },
+        "store": False,
+    }
+    async with httpx.AsyncClient(timeout=None) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"},
+            json=payload,
+        )
+        response.raise_for_status()
+    result = response.json()
+    text = next(
+        content["text"]
+        for output in result.get("output", [])
+        if output.get("type") == "message"
+        for content in output.get("content", [])
+        if content.get("type") == "output_text"
+    )
+    return {
+        int(item["index"]): str(item["category"])
+        for item in json.loads(text).get("items", [])
+        if str(item.get("category")) in PRODUCT_CATEGORIES
+    }
+
+
+async def categorize_invoice_items(
+    db: AsyncSession, items: list[InvoiceItem], *, allow_ai: bool
+) -> None:
+    categories = await _product_categories(db)
+    cached = list(
+        (
+            await db.scalars(
+                select(ProductCategoryCache).where(ProductCategoryCache.category_name != "Outros")
+            )
+        ).all()
+    )
     rules = {
         "bebidas": "Bebidas",
         "refrigerante": "Bebidas",
@@ -92,8 +206,9 @@ async def categorize_invoice_items(db: AsyncSession, items: list[InvoiceItem]) -
         "leite": "Frios",
         "racao": "Pet",
     }
-    unresolved: list[InvoiceItem] = []
-    for item in items:
+    resolved: dict[int, tuple[str, str, Decimal]] = {}
+    unresolved: list[tuple[int, InvoiceItem]] = []
+    for index, item in enumerate(items):
         normalized = _normalize_product(item.description)
         match = next(
             (
@@ -106,13 +221,15 @@ async def categorize_invoice_items(db: AsyncSession, items: list[InvoiceItem]) -
             None,
         )
         if match is None:
-            match = next(
-                (
-                    entry
-                    for entry in cached
-                    if _similarity(normalized, entry.normalized_description) >= 0.82
-                ),
-                None,
+            candidate = max(
+                cached,
+                key=lambda entry: _similarity(normalized, entry.normalized_description),
+                default=None,
+            )
+            match = (
+                candidate
+                if candidate and _similarity(normalized, candidate.normalized_description) >= 0.82
+                else None
             )
         category_name = (
             match.category_name
@@ -120,54 +237,68 @@ async def categorize_invoice_items(db: AsyncSession, items: list[InvoiceItem]) -
             else next((value for key, value in rules.items() if key in normalized), None)
         )
         if category_name is None:
-            unresolved.append(item)
-            category_name = "Outros"
-        category = await db.scalar(
-            select(Category)
-            .where(Category.name == category_name, Category.is_system.is_(True))
-            .limit(1)
+            unresolved.append((index, item))
+        else:
+            resolved[index] = (
+                category_name,
+                match.source if match else "rule",
+                match.confidence if match else Decimal("0.70"),
+            )
+    if unresolved and allow_ai:
+        try:
+            classified = await _llm_product_categories([item for _, item in unresolved])
+            for llm_index, category_name in classified.items():
+                if 0 <= llm_index < len(unresolved):
+                    resolved[unresolved[llm_index][0]] = (
+                        category_name,
+                        "llm",
+                        Decimal("0.90"),
+                    )
+        except (
+            httpx.HTTPError,
+            json.JSONDecodeError,
+            KeyError,
+            StopIteration,
+            TypeError,
+            ValueError,
+        ):
+            pass
+    for index, item in enumerate(items):
+        category_name, source, confidence = resolved.get(
+            index, ("Outros", "fallback", Decimal("0.30"))
         )
-        if category:
-            item.category_id = category.id
-        if match is None:
-            db.add(
-                ProductCategoryCache(
-                    product_code=item.product_code,
-                    normalized_description=normalized,
-                    category_name=category_name,
-                    source="rule",
-                    confidence=Decimal("0.70"),
+        item.category_id = categories[category_name]
+        if category_name == "Outros":
+            continue
+        values = {
+            "id": uuid.uuid4(),
+            "product_code": item.product_code,
+            "normalized_description": _normalize_product(item.description),
+            "category_name": category_name,
+            "source": source,
+            "confidence": confidence,
+        }
+        if item.product_code:
+            await db.execute(
+                insert(ProductCategoryCache)
+                .values(**values)
+                .on_conflict_do_update(
+                    index_elements=[ProductCategoryCache.product_code],
+                    set_={key: value for key, value in values.items() if key != "id"},
                 )
             )
-    if unresolved and settings.openai_api_key:
-        prompt = (
-            "Categorize os itens em Alimentos, Bebidas, Limpeza, Higiene, Padaria, Carnes, Frios, Hortifruti, Congelados, Pet ou Outros. Retorne JSON array de categorias na mesma ordem: "
-            + json.dumps([item.description for item in unresolved], ensure_ascii=False)
-        )
-        try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/responses",
-                    headers={
-                        "Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"
-                    },
-                    json={"model": settings.openai_model, "input": prompt},
-                )
-                response.raise_for_status()
-                categories = json.loads(response.json().get("output_text", "[]"))
-            for item, category_name in zip(unresolved, categories):
-                item.category_id = await db.scalar(
-                    select(Category.id)
-                    .where(Category.name == str(category_name), Category.is_system.is_(True))
-                    .limit(1)
-                )
-        except (httpx.HTTPError, json.JSONDecodeError, TypeError):
-            pass
+        elif not any(
+            entry.normalized_description == values["normalized_description"] for entry in cached
+        ):
+            db.add(ProductCategoryCache(**values))
 
 
 async def _categorize_invoice_in_background(invoice_id: uuid.UUID) -> None:
     async with SessionLocal() as db:
         try:
+            invoice = await db.get(Invoice, invoice_id)
+            if invoice is None:
+                return
             items = list(
                 (
                     await db.scalars(
@@ -175,7 +306,10 @@ async def _categorize_invoice_in_background(invoice_id: uuid.UUID) -> None:
                     )
                 ).all()
             )
-            await categorize_invoice_items(db, items)
+            allow_ai = (
+                await db.scalar(select(User.ai_consent_at).where(User.id == invoice.member_id))
+            ) is not None
+            await categorize_invoice_items(db, items, allow_ai=allow_ai)
             await db.commit()
         except Exception:  # noqa: BLE001 - background classification must not affect ingestion
             await db.rollback()

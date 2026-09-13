@@ -30,9 +30,7 @@ def test_csrf_accepts_only_configured_origins() -> None:
 
     client = TestClient(app)
     client.cookies.set("planna_session", "invalid")
-    response = client.post(
-        "/auth/logout", headers={"Origin": "https://evil.example"}
-    )
+    response = client.post("/auth/logout", headers={"Origin": "https://evil.example"})
 
     assert response.status_code == 403
     assert response.headers["cache-control"] == "private, no-store"

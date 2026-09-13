@@ -46,9 +46,7 @@ class PluggyClient:
         for attempt in range(2):
             key = await self._key(refresh=attempt == 1)
             async with httpx.AsyncClient(base_url=BASE_URL, timeout=60) as client:
-                response = await client.request(
-                    method, path, headers={"X-API-KEY": key}, **kwargs
-                )
+                response = await client.request(method, path, headers={"X-API-KEY": key}, **kwargs)
             if response.status_code != 401 or attempt:
                 response.raise_for_status()
                 return response.json()
@@ -106,7 +104,9 @@ def transaction_values(data: dict[str, Any]) -> dict[str, Any]:
         "date": datetime.fromisoformat(str(data["date"])),
         "amount": amount,
         "description": str(data.get("description") or "Transação")[:500],
-        "merchant_name": (merchant.get("businessName") or merchant.get("name")) if merchant else None,
+        "merchant_name": (merchant.get("businessName") or merchant.get("name"))
+        if merchant
+        else None,
         "merchant_cnpj": merchant.get("cnpj") if merchant else None,
         "type": transaction_type if transaction_type in {"debit", "credit"} else "debit",
         "status": "pending" if str(data.get("status", "POSTED")).upper() == "PENDING" else "posted",
