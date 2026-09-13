@@ -327,5 +327,7 @@ class InsightRead(BaseModel):
     title: str
     body: str
     actions: list[InsightActionRead] = Field(default_factory=list)
+    confidence: float
+    evidence: list[str] = Field(default_factory=list)
     model: str
     generated_at: datetime

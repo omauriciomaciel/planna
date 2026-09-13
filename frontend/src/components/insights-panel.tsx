@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Lightbulb, RefreshCw, Sparkles } from "lucide-react";
+import { EyeOff, Lightbulb, RefreshCw, Sparkles } from "lucide-react";
 
 import { api } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ type Insight = {
   title: string;
   body: string;
   actions: { description: string; estimated_impact: string | null }[];
+  confidence: number;
+  evidence: string[];
   model: string;
   generated_at: string;
 };
@@ -34,35 +36,61 @@ const severity = {
   info: { label: "Oportunidade", variant: "outline" as const },
 };
 
-function InsightCard({ insight, prominent = false }: { insight: Insight; prominent?: boolean }) {
+function InsightCard({
+  insight,
+  onDismiss,
+  prominent = false,
+}: {
+  insight: Insight;
+  onDismiss: (id: string) => void;
+  prominent?: boolean;
+}) {
   const status = severity[insight.severity];
+  const confidence = insight.confidence >= 0.85 ? "Confiança alta" : "Confiança média";
   return (
     <Card size={prominent ? "default" : "sm"}>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant="outline">{confidence}</Badge>
           <span className="text-xs text-muted-foreground">{insight.ref_period}</span>
         </div>
         <CardTitle>{insight.title}</CardTitle>
         <CardDescription className="max-w-[65ch]">{insight.body}</CardDescription>
       </CardHeader>
-      {insight.actions.length > 0 && (
+      {(insight.actions.length > 0 || insight.evidence.length > 0) && (
         <>
           <Separator />
-          <CardContent>
-            <ul className="flex list-none flex-col gap-3 p-0">
-              {insight.actions.map((action, index) => (
-                <li className="flex min-h-11 items-start gap-3" key={`${action.description}-${index}`}>
-                  <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                  <span className="min-w-0 flex-1">{action.description}</span>
-                  {action.estimated_impact !== null && Number(action.estimated_impact) > 0 && (
-                    <Badge variant="outline">
-                      impacto de até {money.format(Number(action.estimated_impact))}
-                    </Badge>
-                  )}
-                </li>
-              ))}
-            </ul>
+          <CardContent className="flex flex-col gap-4">
+            {insight.actions.length > 0 && (
+              <ul className="flex list-none flex-col gap-3 p-0">
+                {insight.actions.map((action, index) => (
+                  <li className="flex min-h-11 items-start gap-3" key={`${action.description}-${index}`}>
+                    <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">{action.description}</span>
+                    {action.estimated_impact !== null && Number(action.estimated_impact) > 0 && (
+                      <Badge variant="outline">
+                        impacto de até {money.format(Number(action.estimated_impact))}
+                      </Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {insight.evidence.length > 0 && (
+              <details className="text-sm text-muted-foreground">
+                <summary className="min-h-11 cursor-pointer py-3 font-medium text-foreground">
+                  Por que estou vendo isso?
+                </summary>
+                <ul className="ml-5 list-disc space-y-1 pb-2">
+                  {insight.evidence.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </details>
+            )}
+            <Button className="self-start" onClick={() => onDismiss(insight.id)} size="sm" variant="ghost">
+              <EyeOff data-icon="inline-start" />
+              Não mostrar novamente
+            </Button>
           </CardContent>
         </>
       )}
@@ -92,6 +120,12 @@ export function InsightsPanel() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    if (!insights.some((insight) => insight.model === "pending-ai")) return;
+    const timer = window.setInterval(() => void load(), 3000);
+    return () => window.clearInterval(timer);
+  }, [insights, load]);
+
   async function refresh() {
     setRefreshing(true);
     setError("");
@@ -101,6 +135,16 @@ export function InsightsPanel() {
       setError("Não foi possível recalcular os insights agora.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function dismiss(id: string) {
+    setError("");
+    try {
+      await api(`/api/insights/${id}/dismiss`, { method: "POST" });
+      setInsights((current) => current.filter((insight) => insight.id !== id));
+    } catch {
+      setError("Não foi possível ocultar o insight agora.");
     }
   }
 
@@ -125,7 +169,7 @@ export function InsightsPanel() {
           </p>
           <p className="text-xs text-muted-foreground">
             {generatedAt
-              ? `Gerado em ${new Date(generatedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · ${insights[0].model === "deterministic" ? "análise local" : "texto gerado com IA"}`
+              ? `Gerado em ${new Date(generatedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · ${insights[0].model === "deterministic" ? "análise local" : insights[0].model === "pending-ai" ? "IA analisando…" : "texto gerado com IA"}`
               : "A análise usa apenas dados financeiros agregados."}
           </p>
         </div>
@@ -144,10 +188,10 @@ export function InsightsPanel() {
       {insights.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="lg:col-span-2">
-            <InsightCard insight={insights[0]} prominent />
+            <InsightCard insight={insights[0]} onDismiss={(id) => void dismiss(id)} prominent />
           </div>
           {insights.slice(1).map((insight) => (
-            <InsightCard insight={insight} key={insight.id} />
+            <InsightCard insight={insight} key={insight.id} onDismiss={(id) => void dismiss(id)} />
           ))}
         </div>
       ) : (

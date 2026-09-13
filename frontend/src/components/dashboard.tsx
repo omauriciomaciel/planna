@@ -65,8 +65,12 @@ type Account = {
   member_name: string;
   institution_name: string;
   name: string;
+  type: "bank" | "credit" | "investment";
+  subtype: string | null;
+  number_masked: string | null;
   balance: string;
   currency: string;
+  credit_limit: string | null;
   last_synced_at: string | null;
 };
 type Category = { id: string; name: string; kind: string };
@@ -108,7 +112,7 @@ type Transaction = {
 };
 type TransactionPage = { items: Transaction[]; next_cursor: string | null };
 type Preset = "month" | "quarter" | "year" | "custom";
-type DashboardView = "overview" | "transactions" | "insights" | "wealth" | "invoices";
+type DashboardView = "overview" | "accounts" | "transactions" | "insights" | "wealth" | "invoices";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" });
@@ -116,6 +120,7 @@ const monthName = new Intl.DateTimeFormat("pt-BR", { month: "short" });
 const selectClass = "h-12 w-full rounded-xl border border-border bg-input/45 px-4 text-sm outline-none transition-[background-color,border-color,box-shadow] focus:border-ring focus:bg-card focus:ring-3 focus:ring-ring/20";
 const navigationItems = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
+  { id: "accounts", label: "Contas", icon: Landmark },
   { id: "transactions", label: "Movimentações", icon: WalletCards },
   { id: "insights", label: "Insights", icon: Sparkles },
   { id: "wealth", label: "Patrimônio", icon: ChartNoAxesCombined },
@@ -125,6 +130,10 @@ const viewDetails: Record<DashboardView, { title: string; description: string }>
   overview: {
     title: "Visão da casa",
     description: "O resumo financeiro do período, sem perder o fio da meada.",
+  },
+  accounts: {
+    title: "Contas conectadas",
+    description: "Veja saldos, faturas e quem compartilhou cada conta com a casa.",
   },
   transactions: {
     title: "Movimentações",
@@ -143,6 +152,16 @@ const viewDetails: Record<DashboardView, { title: string; description: string }>
     description: "Importe uma NFC-e e concilie a compra com a movimentação bancária.",
   },
 };
+
+const accountTypeLabels: Record<Account["type"], string> = {
+  bank: "Conta bancária",
+  credit: "Cartão de crédito",
+  investment: "Investimento",
+};
+
+function accountMoney(value: string, currency: string) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(Number(value));
+}
 
 function iso(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -567,6 +586,122 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
           {(activeView === "overview" || activeView === "transactions") && (loading || !kpis) ? (
             <Card><CardHeader><CardTitle>Organizando seus números…</CardTitle><CardDescription>Receitas, despesas e contas estão sendo consolidadas.</CardDescription></CardHeader></Card>
           ) : null}
+
+          {activeView === "accounts" && loading && (
+            <Card aria-live="polite">
+              <CardHeader>
+                <CardTitle>Buscando contas conectadas…</CardTitle>
+                <CardDescription>Saldos, faturas e sincronizações estão sendo organizados.</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
+          {activeView === "accounts" && !loading && !error && (
+            <Card>
+              <CardHeader className="gap-4 sm:grid-cols-[1fr_auto]">
+                <div className="flex flex-col gap-1.5">
+                  <CardTitle>
+                    {accounts.length} {accounts.length === 1 ? "conta compartilhada" : "contas compartilhadas"}
+                  </CardTitle>
+                  <CardDescription>
+                    {lastSync
+                      ? `Última atualização em ${new Date(lastSync).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.`
+                      : "Conecte uma instituição para reunir a vida financeira da casa."}
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:justify-end">
+                  <Button disabled={syncing} onClick={connect}>
+                    <Landmark data-icon="inline-start" />
+                    Conectar instituição
+                  </Button>
+                  <Button disabled={syncing || !accounts.length} onClick={sync} variant="outline">
+                    <RefreshCw data-icon="inline-start" />
+                    {syncing ? "Sincronizando…" : "Atualizar contas"}
+                  </Button>
+                </div>
+              </CardHeader>
+
+              {accounts.length ? (
+                <CardContent className="px-0">
+                  <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(9rem,0.6fr)_minmax(10rem,0.7fr)_minmax(10rem,auto)] gap-4 border-b border-border/70 px-5 pb-3 text-xs font-medium text-muted-foreground md:grid">
+                    <span>Instituição e conta</span>
+                    <span>Titular</span>
+                    <span>Sincronização</span>
+                    <span className="text-right">Saldo ou fatura</span>
+                  </div>
+                  <ul className="list-none p-0">
+                    {accounts.map((item) => (
+                      <li
+                        className="grid gap-4 border-b border-border/70 px-5 py-5 last:border-b-0 md:grid-cols-[minmax(0,1.5fr)_minmax(9rem,0.6fr)_minmax(10rem,0.7fr)_minmax(10rem,auto)] md:items-center"
+                        key={item.id}
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                            <Landmark className="size-5" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">{item.name.trim()}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{item.institution_name}</span>
+                              <Badge variant="outline">{accountTypeLabels[item.type]}</Badge>
+                              {item.number_masked && (
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  {item.type === "credit" ? "Final" : "Conta"} {item.number_masked}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="flex items-center gap-2 text-sm">
+                          <UsersRound className="size-4 text-muted-foreground" aria-hidden="true" />
+                          {item.member_name}
+                        </p>
+                        <div>
+                          <p className="text-sm">
+                            {item.last_synced_at
+                              ? new Date(item.last_synced_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+                              : "Aguardando atualização"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.last_synced_at ? "Dados sincronizados" : "Dados ainda não recebidos"}
+                          </p>
+                        </div>
+                        <div className="md:text-right">
+                          <p className="text-xs text-muted-foreground md:hidden">
+                            {item.type === "credit" ? "Fatura atual" : "Saldo atual"}
+                          </p>
+                          <p className="text-lg font-semibold tracking-[-0.02em] tabular-nums">
+                            {accountMoney(item.balance, item.currency)}
+                          </p>
+                          {item.type === "credit" && item.credit_limit !== null && (
+                            <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                              Limite {accountMoney(item.credit_limit, item.currency)}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              ) : (
+                <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+                  <span className="grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <Landmark className="size-6" aria-hidden="true" />
+                  </span>
+                  <div className="flex max-w-md flex-col gap-1">
+                    <p className="font-semibold">Nenhuma conta conectada</p>
+                    <p className="text-sm text-muted-foreground">
+                      Conecte uma instituição para trazer saldos e movimentações para a visão da casa.
+                    </p>
+                  </div>
+                  <Button onClick={connect}>
+                    <Landmark data-icon="inline-start" />
+                    Conectar primeira instituição
+                  </Button>
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           {activeView === "overview" && kpis && (
             <>
