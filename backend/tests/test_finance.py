@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -42,6 +42,11 @@ def test_finance_helpers_preserve_money_signs_and_cursor() -> None:
     assert decode_cursor(encode_cursor(timestamp, row_id)) == (timestamp, row_id)
     with pytest.raises(HTTPException):
         decode_cursor("não-é-um-cursor")
+
+
+def test_installment_month_projection_handles_short_months() -> None:
+    assert finance._add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
+    assert finance._add_months(date(2026, 11, 30), 2) == date(2027, 1, 30)
 
 
 def test_sync_populates_transaction_before_category_query(monkeypatch: pytest.MonkeyPatch) -> None:

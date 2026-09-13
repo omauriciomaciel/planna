@@ -212,6 +212,16 @@ class InvoiceItem(Base):
     category_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("categories.id"), index=True)
 
 
+class ProductCategoryCache(Base):
+    __tablename__ = "product_category_cache"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    product_code: Mapped[str | None] = mapped_column(String(80), unique=True, index=True)
+    normalized_description: Mapped[str] = mapped_column(String(500), index=True)
+    category_name: Mapped[str] = mapped_column(String(100))
+    source: Mapped[str] = mapped_column(String(16), default="llm")
+    confidence: Mapped[Decimal] = mapped_column(Numeric(3, 2), default=0)
+
+
 class Transaction(TimestampMixin, Base):
     __tablename__ = "transactions"
     __table_args__ = (
@@ -243,6 +253,7 @@ class Transaction(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16))
     installment_current: Mapped[int | None]
     installment_total: Mapped[int | None]
+    economic_type: Mapped[str | None] = mapped_column(String(24), index=True)
     source: Mapped[str] = mapped_column(String(16), default="pluggy")
     raw: Mapped[dict] = mapped_column(JSON)
 
@@ -354,9 +365,7 @@ class NetWorthSnapshot(TimestampMixin, Base):
 class Insight(Base):
     __tablename__ = "insights"
     __table_args__ = (
-        CheckConstraint(
-            "severity IN ('info', 'warning', 'critical')", name="ck_insight_severity"
-        ),
+        CheckConstraint("severity IN ('info', 'warning', 'critical')", name="ck_insight_severity"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

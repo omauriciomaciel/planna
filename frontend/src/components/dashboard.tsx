@@ -83,6 +83,11 @@ type Kpis = {
 };
 type Trend = { month: string; income: string; expense: string; balance: string };
 type Expense = { category_id: string | null; category: string; amount: string };
+type InstallmentForecast = {
+  total_remaining: string;
+  monthly_installment_burden: string;
+  by_category: { category_name: string; remaining_total: string; monthly_impact: string }[];
+};
 type Transaction = {
   id: string;
   date: string;
@@ -285,6 +290,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [trends, setTrends] = useState<Trend[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [installments, setInstallments] = useState<InstallmentForecast | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -314,12 +320,13 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
     setError("");
     try {
       const period = queryString({ date_from: from, date_to: to });
-      const [nextAccounts, nextCategories, nextKpis, nextTrends, nextExpenses, page] = await Promise.all([
+      const [nextAccounts, nextCategories, nextKpis, nextTrends, nextExpenses, nextInstallments, page] = await Promise.all([
         api<Account[]>("/api/accounts"),
         api<Category[]>("/api/categories"),
         api<Kpis>(`/api/analytics/kpis?${period}`),
         api<Trend[]>(`/api/analytics/trends?${queryString({ date_to: to })}`),
         api<Expense[]>(`/api/analytics/expenses-by-category?${period}`),
+        api<InstallmentForecast>("/api/analytics/installments-forecast"),
         api<TransactionPage>(`/api/transactions?${queryString(transactionParams)}`),
       ]);
       setAccounts(nextAccounts);
@@ -327,6 +334,7 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
       setKpis(nextKpis);
       setTrends(nextTrends);
       setExpenses(nextExpenses);
+      setInstallments(nextInstallments);
       setTransactions(page.items);
       setNextCursor(page.next_cursor);
     } catch {
@@ -734,6 +742,19 @@ export function Dashboard({ me, onLogout, pendingLogout }: { me: Me; onLogout: (
                 <KpiCard data={kpis.expense} expense label="Despesa" />
                 <KpiCard data={kpis.balance} label="Saldo do período" />
               </section>
+
+              {installments && Number(installments.total_remaining) > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Parcelas futuras</CardTitle>
+                    <CardDescription>Compromissos de cartão ainda não pagos.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <div><p className="text-xs text-muted-foreground">Total restante</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(Number(installments.total_remaining))}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Impacto mensal</p><p className="mt-1 text-2xl font-semibold tabular-nums">{money.format(Number(installments.monthly_installment_burden))}</p></div>
+                  </CardContent>
+                </Card>
+              )}
 
               <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
                 <Card><CardHeader><CardTitle>Tendência em 12 meses</CardTitle><CardDescription>Receitas e despesas reconhecidas nas contas conectadas.</CardDescription></CardHeader><CardContent><TrendChart values={trends} /></CardContent></Card>

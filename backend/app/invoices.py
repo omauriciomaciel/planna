@@ -1,3 +1,5 @@
+import json
+import re
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
@@ -5,14 +7,16 @@ from decimal import Decimal
 from typing import Annotated
 from urllib.parse import parse_qs, urlsplit
 
-from fastapi import APIRouter, HTTPException, Query
+import httpx
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentAuth
-from app.database import DbSession
-from app.models import Account, Invoice, InvoiceItem, Transaction
+from app.config import settings
+from app.database import DbSession, SessionLocal
+from app.models import Account, Category, Invoice, InvoiceItem, ProductCategoryCache, Transaction
 from app.schemas import (
     InvoiceIngestRead,
     InvoiceIngestRequest,
@@ -55,6 +59,126 @@ def _explicit_voucher(payment_method: str | None) -> bool:
     return any(
         word in normalized for word in ("vale", "alimenta", "refei", "alelo", "sodexo", "ticket")
     )
+
+
+def _normalize_product(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _similarity(left: str, right: str) -> float:
+    previous = list(range(len(right) + 1))
+    for i, char in enumerate(left, 1):
+        current = [i]
+        for j, other in enumerate(right, 1):
+            current.append(min(current[-1] + 1, previous[j] + 1, previous[j - 1] + (char != other)))
+        previous = current
+    return 1 - previous[-1] / max(len(left), len(right), 1)
+
+
+async def categorize_invoice_items(db: AsyncSession, items: list[InvoiceItem]) -> None:
+    cached = list((await db.scalars(select(ProductCategoryCache))).all())
+    rules = {
+        "bebidas": "Bebidas",
+        "refrigerante": "Bebidas",
+        "suco": "Bebidas",
+        "detergente": "Limpeza",
+        "sabao": "Limpeza",
+        "shampoo": "Higiene",
+        "carne": "Carnes",
+        "frango": "Carnes",
+        "arroz": "Alimentos",
+        "feijao": "Alimentos",
+        "pao": "Padaria",
+        "leite": "Frios",
+        "racao": "Pet",
+    }
+    unresolved: list[InvoiceItem] = []
+    for item in items:
+        normalized = _normalize_product(item.description)
+        match = next(
+            (
+                entry
+                for entry in cached
+                if entry.product_code
+                and item.product_code
+                and entry.product_code == item.product_code
+            ),
+            None,
+        )
+        if match is None:
+            match = next(
+                (
+                    entry
+                    for entry in cached
+                    if _similarity(normalized, entry.normalized_description) >= 0.82
+                ),
+                None,
+            )
+        category_name = (
+            match.category_name
+            if match
+            else next((value for key, value in rules.items() if key in normalized), None)
+        )
+        if category_name is None:
+            unresolved.append(item)
+            category_name = "Outros"
+        category = await db.scalar(
+            select(Category)
+            .where(Category.name == category_name, Category.is_system.is_(True))
+            .limit(1)
+        )
+        if category:
+            item.category_id = category.id
+        if match is None:
+            db.add(
+                ProductCategoryCache(
+                    product_code=item.product_code,
+                    normalized_description=normalized,
+                    category_name=category_name,
+                    source="rule",
+                    confidence=Decimal("0.70"),
+                )
+            )
+    if unresolved and settings.openai_api_key:
+        prompt = (
+            "Categorize os itens em Alimentos, Bebidas, Limpeza, Higiene, Padaria, Carnes, Frios, Hortifruti, Congelados, Pet ou Outros. Retorne JSON array de categorias na mesma ordem: "
+            + json.dumps([item.description for item in unresolved], ensure_ascii=False)
+        )
+        try:
+            async with httpx.AsyncClient(timeout=None) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers={
+                        "Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"
+                    },
+                    json={"model": settings.openai_model, "input": prompt},
+                )
+                response.raise_for_status()
+                categories = json.loads(response.json().get("output_text", "[]"))
+            for item, category_name in zip(unresolved, categories):
+                item.category_id = await db.scalar(
+                    select(Category.id)
+                    .where(Category.name == str(category_name), Category.is_system.is_(True))
+                    .limit(1)
+                )
+        except (httpx.HTTPError, json.JSONDecodeError, TypeError):
+            pass
+
+
+async def _categorize_invoice_in_background(invoice_id: uuid.UUID) -> None:
+    async with SessionLocal() as db:
+        try:
+            items = list(
+                (
+                    await db.scalars(
+                        select(InvoiceItem).where(InvoiceItem.invoice_id == invoice_id)
+                    )
+                ).all()
+            )
+            await categorize_invoice_items(db, items)
+            await db.commit()
+        except Exception:  # noqa: BLE001 - background classification must not affect ingestion
+            await db.rollback()
 
 
 async def _candidates(db: AsyncSession, invoice: Invoice) -> list[Transaction]:
@@ -116,6 +240,7 @@ async def _ensure_voucher(db: AsyncSession, invoice: Invoice) -> None:
                 status="posted",
                 installment_current=None,
                 installment_total=None,
+                economic_type="voucher_expense",
                 source="voucher",
                 raw={"invoice_access_key": invoice.access_key},
             )
@@ -211,7 +336,10 @@ async def _existing_invoice(
 
 @router.post("/ingest")
 async def ingest_invoice(
-    payload: InvoiceIngestRequest, auth: CurrentAuth, db: DbSession
+    payload: InvoiceIngestRequest,
+    auth: CurrentAuth,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> InvoiceIngestRead:
     try:
         source_url = normalize_nfce_url(payload.url)
@@ -253,22 +381,21 @@ async def ingest_invoice(
     db.add(invoice)
     try:
         await db.flush()
-        db.add_all(
-            [
-                InvoiceItem(
-                    invoice_id=invoice.id,
-                    description=item.description,
-                    product_code=item.product_code,
-                    ncm=None,
-                    quantity=item.quantity,
-                    unit=item.unit,
-                    unit_price=item.unit_price,
-                    total_price=item.total_price,
-                    category_id=None,
-                )
-                for item in parsed.items
-            ]
-        )
+        invoice_items = [
+            InvoiceItem(
+                invoice_id=invoice.id,
+                description=item.description,
+                product_code=item.product_code,
+                ncm=None,
+                quantity=item.quantity,
+                unit=item.unit,
+                unit_price=item.unit_price,
+                total_price=item.total_price,
+                category_id=None,
+            )
+            for item in parsed.items
+        ]
+        db.add_all(invoice_items)
         await reconcile_invoice(db, invoice)
         await db.commit()
     except IntegrityError:
@@ -277,6 +404,7 @@ async def ingest_invoice(
         if existing:
             return InvoiceIngestRead(invoice=await invoice_read(db, existing), created=False)
         raise
+    background_tasks.add_task(_categorize_invoice_in_background, invoice.id)
     return InvoiceIngestRead(invoice=await invoice_read(db, invoice), created=True)
 
 

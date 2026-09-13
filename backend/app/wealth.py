@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentAuth
 from app.database import DbSession
+from app.economic import CASH_EXCLUDED_TYPES
 from app.models import (
     Account,
     Asset,
@@ -184,6 +185,10 @@ async def _month_totals(
                 or_(
                     Account.household_id == household_id,
                     Invoice.household_id == household_id,
+                ),
+                or_(
+                    Transaction.economic_type.is_(None),
+                    Transaction.economic_type.not_in(CASH_EXCLUDED_TYPES),
                 ),
                 Transaction.date >= datetime.combine(month, time.min, UTC),
                 Transaction.date < datetime.combine(next_month, time.min, UTC),

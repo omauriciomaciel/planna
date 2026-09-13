@@ -1,5 +1,6 @@
 import base64
 import binascii
+import calendar
 import secrets
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
@@ -8,12 +9,15 @@ from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.auth import CurrentAuth
+from app.category_translations import translate_category
 from app.config import settings
 from app.database import DbSession, SessionLocal
+from app.economic import CASH_EXCLUDED_TYPES, economic_type
 from app.invoices import reconcile_unmatched_invoices
 from app.models import (
     Account,
@@ -33,10 +37,14 @@ from app.schemas import (
     CategoryCreate,
     CategoryExpenseRead,
     CategoryRead,
+    InstallmentForecastItem,
+    InstallmentForecastRead,
+    InstallmentsByCategory,
     InvoiceItemRead,
     KpiRead,
     KpisRead,
     Message,
+    MonthlyProjection,
     PluggyConnectTokenRead,
     PluggyItemCreate,
     SyncRead,
@@ -49,6 +57,13 @@ from app.schemas import (
 from app.wealth import record_snapshot, sync_pluggy_wealth
 
 router = APIRouter(tags=["finance"])
+
+
+def _cash_transaction_filter():
+    return or_(
+        Transaction.economic_type.is_(None),
+        Transaction.economic_type.not_in(CASH_EXCLUDED_TYPES),
+    )
 
 
 def variation(current: Decimal, previous: Decimal) -> float | None:
@@ -79,6 +94,49 @@ def date_bounds(date_from: date | None, date_to: date | None) -> tuple[date, dat
     return start, end
 
 
+async def _match_transfer_pairs(db: AsyncSession, household_id: uuid.UUID) -> None:
+    if not hasattr(db, "execute"):
+        return
+    debit = aliased(Transaction)
+    credit = aliased(Transaction)
+    debit_account = aliased(Account)
+    credit_account = aliased(Account)
+    pairs = (
+        await db.execute(
+            select(debit.id, credit.id)
+            .join(debit_account, debit_account.id == debit.account_id)
+            .join(
+                credit,
+                and_(
+                    credit.account_id != debit.account_id,
+                    credit.type == "credit",
+                    credit.status == "posted",
+                    credit.amount == -debit.amount,
+                    credit.date.between(
+                        debit.date - timedelta(days=1), debit.date + timedelta(days=1)
+                    ),
+                ),
+            )
+            .join(credit_account, credit_account.id == credit.account_id)
+            .where(
+                debit_account.household_id == household_id,
+                credit_account.household_id == household_id,
+                debit.type == "debit",
+                debit.status == "posted",
+                debit.amount < 0,
+                debit.economic_type.is_(None),
+                credit.economic_type.is_(None),
+            )
+        )
+    ).all()
+    for debit_id, credit_id in pairs:
+        await db.execute(
+            update(Transaction)
+            .where(Transaction.id.in_((debit_id, credit_id)))
+            .values(economic_type="transfer")
+        )
+
+
 async def _category(db: AsyncSession, data: dict[str, Any]) -> Category | None:
     external_id = data.get("categoryId")
     name = data.get("category")
@@ -89,13 +147,15 @@ async def _category(db: AsyncSession, data: dict[str, Any]) -> Category | None:
         select(Category).where(Category.external_id == str(external_id))
         if external_id
         else select(Category).where(
-            Category.household_id.is_(None), Category.name == str(name), Category.kind == kind
+            Category.household_id.is_(None),
+            Category.name == translate_category(str(name)),
+            Category.kind == kind,
         )
     )
     if category:
         return category
     category = Category(
-        name=str(name or "Sem categoria")[:100],
+        name=translate_category(str(name or "Sem categoria"))[:100],
         kind=kind,
         is_system=True,
         external_id=str(external_id) if external_id else None,
@@ -125,7 +185,9 @@ async def _upsert_item(
     item.status = str(item_data.get("status") or "UPDATING")
     item.execution_status = item_data.get("executionStatus")
     error = item_data.get("error")
-    item.error = str(error.get("message") if isinstance(error, dict) else error)[:500] if error else None
+    item.error = (
+        str(error.get("message") if isinstance(error, dict) else error)[:500] if error else None
+    )
     await db.flush()
     return item
 
@@ -136,9 +198,7 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
     account_count = transaction_count = 0
     for raw_account in await client.accounts(item.pluggy_item_id):
         external_id = str(raw_account["id"])
-        account = await db.scalar(
-            select(Account).where(Account.pluggy_account_id == external_id)
-        )
+        account = await db.scalar(select(Account).where(Account.pluggy_account_id == external_id))
         if account is None:
             account = Account(
                 household_id=item.household_id,
@@ -151,12 +211,16 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
         raw_type = str(raw_account.get("type", "BANK")).lower()
         account.type = raw_type if raw_type in {"bank", "credit", "investment"} else "bank"
         account.subtype = raw_account.get("subtype")
-        account.name = str(raw_account.get("marketingName") or raw_account.get("name") or "Conta")[:160]
+        account.name = str(raw_account.get("marketingName") or raw_account.get("name") or "Conta")[
+            :160
+        ]
         account.number_masked = raw_account.get("number")
         account.balance = Decimal(str(raw_account.get("balance") or 0))
         account.currency = str(raw_account.get("currencyCode") or "BRL")[:3]
         account.credit_limit = (
-            Decimal(str(credit_data["creditLimit"])) if credit_data.get("creditLimit") is not None else None
+            Decimal(str(credit_data["creditLimit"]))
+            if credit_data.get("creditLimit") is not None
+            else None
         )
         due_date = credit_data.get("balanceDueDate")
         account.due_day = int(str(due_date)[-2:]) if due_date else None
@@ -179,9 +243,17 @@ async def sync_one(db: AsyncSession, item: PluggyItem) -> SyncRead:
                 setattr(transaction, field, value)
             category = await _category(db, raw_transaction)
             transaction.category_id = category.id if category else None
+            transaction.economic_type = economic_type(
+                transaction.type,
+                transaction.description,
+                category.name if category else "",
+                transaction.source,
+                account.type,
+            )[0]
             transaction_count += 1
         db.add(AccountBalanceSnapshot(account_id=account.id, balance=account.balance))
     await sync_pluggy_wealth(db, item)
+    await _match_transfer_pairs(db, item.household_id)
     item.last_synced_at = datetime.now(UTC)
     await reconcile_unmatched_invoices(db, item.household_id)
     await record_snapshot(db, item.household_id)
@@ -208,7 +280,12 @@ async def _sync_webhook(payload: dict[str, Any]) -> None:
             if household_id is None:
                 return
             item = await _upsert_item(db, item_data, household_id, member_id)
-        if payload.get("event") in {"item/created", "item/updated", "transactions/created", "transactions/updated"}:
+        if payload.get("event") in {
+            "item/created",
+            "item/updated",
+            "transactions/created",
+            "transactions/updated",
+        }:
             await sync_one(db, item)
 
 
@@ -233,7 +310,9 @@ async def register_item(payload: PluggyItemCreate, auth: CurrentAuth, db: DbSess
     except HTTPException:
         raise
     except (PluggyUnavailable, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=503, detail="Não foi possível sincronizar a conexão") from exc
+        raise HTTPException(
+            status_code=503, detail="Não foi possível sincronizar a conexão"
+        ) from exc
 
 
 @router.post("/pluggy/sync")
@@ -260,8 +339,10 @@ async def pluggy_webhook(
     background_tasks: BackgroundTasks,
     token: Annotated[str | None, Query()] = None,
 ) -> Message:
-    if not settings.pluggy_webhook_secret or not token or not secrets.compare_digest(
-        token, settings.pluggy_webhook_secret
+    if (
+        not settings.pluggy_webhook_secret
+        or not token
+        or not secrets.compare_digest(token, settings.pluggy_webhook_secret)
     ):
         raise HTTPException(status_code=401, detail="Webhook não autorizado")
     background_tasks.add_task(_sync_webhook, payload)
@@ -311,11 +392,16 @@ async def categories(auth: CurrentAuth, db: DbSession) -> list[CategoryRead]:
             .order_by(Category.name)
         )
     ).all()
-    return [CategoryRead(id=row.id, name=row.name, kind=row.kind, is_system=row.is_system) for row in rows]
+    return [
+        CategoryRead(id=row.id, name=row.name, kind=row.kind, is_system=row.is_system)
+        for row in rows
+    ]
 
 
 @router.post("/categories", status_code=status.HTTP_201_CREATED)
-async def create_category(payload: CategoryCreate, auth: CurrentAuth, db: DbSession) -> CategoryRead:
+async def create_category(
+    payload: CategoryCreate, auth: CurrentAuth, db: DbSession
+) -> CategoryRead:
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="Nome da categoria é obrigatório")
@@ -503,17 +589,24 @@ async def update_transaction_category(
     return Message(message="Categoria atualizada")
 
 
-async def _totals(db: AsyncSession, household_id: uuid.UUID, start: date, end: date) -> tuple[Decimal, Decimal]:
+async def _totals(
+    db: AsyncSession, household_id: uuid.UUID, start: date, end: date
+) -> tuple[Decimal, Decimal]:
     income, expense = (
         await db.execute(
             select(
-                func.coalesce(func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0),
-                func.coalesce(func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0),
+                func.coalesce(
+                    func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0
+                ),
+                func.coalesce(
+                    func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0
+                ),
             )
             .outerjoin(Account, Account.id == Transaction.account_id)
             .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
             .where(
                 or_(Account.household_id == household_id, Invoice.household_id == household_id),
+                _cash_transaction_filter(),
                 Transaction.date >= datetime.combine(start, time.min, UTC),
                 Transaction.date < datetime.combine(end + timedelta(days=1), time.min, UTC),
             )
@@ -522,9 +615,7 @@ async def _totals(db: AsyncSession, household_id: uuid.UUID, start: date, end: d
     return Decimal(income), Decimal(expense)
 
 
-async def _net_worth_at(
-    db: AsyncSession, household_id: uuid.UUID, end: date
-) -> Decimal | None:
+async def _net_worth_at(db: AsyncSession, household_id: uuid.UUID, end: date) -> Decimal | None:
     snapshot = await db.scalar(
         select(NetWorthSnapshot.net_worth)
         .where(
@@ -591,7 +682,9 @@ async def kpis(
                 select(
                     func.coalesce(
                         func.sum(
-                            case((Account.type == "credit", -Account.balance), else_=Account.balance)
+                            case(
+                                (Account.type == "credit", -Account.balance), else_=Account.balance
+                            )
                         ),
                         0,
                     )
@@ -607,7 +700,9 @@ async def kpis(
         balance=KpiRead(value=balance, variation=variation(balance, previous_balance)),
         net_worth=KpiRead(
             value=net_worth,
-            variation=variation(net_worth, previous_net_worth) if previous_net_worth is not None else None,
+            variation=variation(net_worth, previous_net_worth)
+            if previous_net_worth is not None
+            else None,
         ),
         date_from=start,
         date_to=end,
@@ -623,6 +718,96 @@ def _shift_month(value: date, amount: int) -> date:
     return date(index // 12, index % 12 + 1, 1)
 
 
+def _add_months(value: date, amount: int) -> date:
+    target = _shift_month(value.replace(day=1), amount)
+    return target.replace(day=min(value.day, calendar.monthrange(target.year, target.month)[1]))
+
+
+@router.get("/analytics/installments-forecast")
+async def installments_forecast(auth: CurrentAuth, db: DbSession) -> InstallmentForecastRead:
+    rows = (
+        await db.execute(
+            select(
+                Transaction.id,
+                Transaction.description,
+                Transaction.merchant_name,
+                Transaction.category_id,
+                Category.name,
+                Transaction.amount,
+                Transaction.date,
+                Transaction.installment_current,
+                Transaction.installment_total,
+            )
+            .outerjoin(Category, Category.id == Transaction.category_id)
+            .outerjoin(Account, Account.id == Transaction.account_id)
+            .where(
+                Account.household_id == auth.household.id,
+                Transaction.installment_total > 1,
+                Transaction.installment_current < Transaction.installment_total,
+                Transaction.status == "posted",
+            )
+        )
+    ).all()
+    by_category: dict[tuple[uuid.UUID | None, str], dict[str, Any]] = {}
+    by_month: dict[date, Decimal] = {}
+    total_remaining = Decimal(0)
+    monthly_burden = Decimal(0)
+    for row in rows:
+        current = int(row.installment_current)
+        total = int(row.installment_total)
+        remaining = total - current
+        amount = abs(Decimal(row.amount))
+        remaining_total = amount * remaining
+        total_remaining += remaining_total
+        monthly_burden += amount
+        transaction_date = row.date.date() if isinstance(row.date, datetime) else row.date
+        item = InstallmentForecastItem(
+            transaction_id=row.id,
+            description=row.description,
+            merchant_name=row.merchant_name,
+            category_id=row.category_id,
+            category_name=row.name,
+            installment_current=current,
+            installment_total=total,
+            installment_amount=amount,
+            remaining_installments=remaining,
+            remaining_total=remaining_total,
+            estimated_end_date=_add_months(transaction_date, remaining),
+        )
+        category_key = (row.category_id, row.name or "Sem categoria")
+        bucket = by_category.setdefault(
+            category_key,
+            {"remaining_total": Decimal(0), "monthly_impact": Decimal(0), "items": []},
+        )
+        bucket["remaining_total"] += remaining_total
+        bucket["monthly_impact"] += amount
+        bucket["items"].append(item)
+        for offset in range(1, remaining + 1):
+            month = _add_months(transaction_date, offset).replace(day=1)
+            by_month[month] = by_month.get(month, Decimal(0)) + amount
+    categories = [
+        InstallmentsByCategory(
+            category_id=category_id,
+            category_name=category_name,
+            remaining_total=values["remaining_total"],
+            monthly_impact=values["monthly_impact"],
+            items=sorted(values["items"], key=lambda item: item.remaining_total, reverse=True),
+        )
+        for (category_id, category_name), values in sorted(
+            by_category.items(), key=lambda entry: entry[1]["remaining_total"], reverse=True
+        )
+    ]
+    return InstallmentForecastRead(
+        total_remaining=total_remaining,
+        monthly_installment_burden=monthly_burden,
+        by_category=categories,
+        by_month=[
+            MonthlyProjection(month=month, amount=amount)
+            for month, amount in sorted(by_month.items())
+        ],
+    )
+
+
 @router.get("/analytics/trends")
 async def trends(
     auth: CurrentAuth,
@@ -636,8 +821,12 @@ async def trends(
         await db.execute(
             select(
                 month,
-                func.coalesce(func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0),
-                func.coalesce(func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0),
+                func.coalesce(
+                    func.sum(case((Transaction.amount > 0, Transaction.amount), else_=0)), 0
+                ),
+                func.coalesce(
+                    func.sum(case((Transaction.amount < 0, -Transaction.amount), else_=0)), 0
+                ),
             )
             .outerjoin(Account, Account.id == Transaction.account_id)
             .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
@@ -646,6 +835,7 @@ async def trends(
                     Account.household_id == auth.household.id,
                     Invoice.household_id == auth.household.id,
                 ),
+                _cash_transaction_filter(),
                 Transaction.date >= datetime.combine(start_month, time.min, UTC),
                 Transaction.date < datetime.combine(_shift_month(end_month, 1), time.min, UTC),
             )
@@ -676,7 +866,11 @@ async def expenses_by_category(
     start, end = date_bounds(date_from, date_to)
     rows = (
         await db.execute(
-            select(Category.id, func.coalesce(Category.name, "Sem categoria"), func.sum(-Transaction.amount))
+            select(
+                Category.id,
+                func.coalesce(Category.name, "Sem categoria"),
+                func.sum(-Transaction.amount),
+            )
             .outerjoin(Account, Account.id == Transaction.account_id)
             .outerjoin(Invoice, Invoice.id == Transaction.source_invoice_id)
             .outerjoin(Category, Category.id == Transaction.category_id)
@@ -686,6 +880,7 @@ async def expenses_by_category(
                     Invoice.household_id == auth.household.id,
                 ),
                 Transaction.amount < 0,
+                _cash_transaction_filter(),
                 Transaction.date >= datetime.combine(start, time.min, UTC),
                 Transaction.date < datetime.combine(end + timedelta(days=1), time.min, UTC),
             )

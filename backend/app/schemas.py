@@ -154,6 +154,40 @@ class CategoryExpenseRead(BaseModel):
     amount: Decimal
 
 
+class MonthlyProjection(BaseModel):
+    month: date
+    amount: Decimal
+
+
+class InstallmentForecastItem(BaseModel):
+    transaction_id: uuid.UUID
+    description: str
+    merchant_name: str | None
+    category_id: uuid.UUID | None
+    category_name: str | None
+    installment_current: int
+    installment_total: int
+    installment_amount: Decimal
+    remaining_installments: int
+    remaining_total: Decimal
+    estimated_end_date: date
+
+
+class InstallmentsByCategory(BaseModel):
+    category_id: uuid.UUID | None
+    category_name: str
+    remaining_total: Decimal
+    monthly_impact: Decimal
+    items: list[InstallmentForecastItem]
+
+
+class InstallmentForecastRead(BaseModel):
+    total_remaining: Decimal
+    monthly_installment_burden: Decimal
+    by_category: list[InstallmentsByCategory]
+    by_month: list[MonthlyProjection]
+
+
 class InvoiceIngestRequest(BaseModel):
     url: str = Field(min_length=44, max_length=4096)
 
