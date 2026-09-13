@@ -22,6 +22,7 @@ from app.models import (
     Account,
     AIRun,
     Category,
+    Household,
     HouseholdMember,
     Insight,
     Invoice,
@@ -30,11 +31,23 @@ from app.models import (
     Transaction,
     User,
 )
-from app.schemas import InsightActionRead, InsightRead, Message
+from app.schemas import FinancialContextUpdate, InsightActionRead, InsightRead, Message
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 Severity = Literal["info", "warning", "critical"]
 GROCERY_TERMS = ("mercado", "supermercado", "atacadao", "mercearia", "hipermercado")
+
+
+@router.patch("/context", response_model=Message)
+async def update_financial_context(
+    payload: FinancialContextUpdate, auth: CurrentAuth, db: DbSession
+) -> Message:
+    household = await db.get(Household, auth.household.id)
+    if household is None:
+        raise HTTPException(status_code=404, detail="Domicílio não encontrado")
+    household.financial_context = payload.financial_context.strip()[:1000]
+    await db.commit()
+    return Message(message="Contexto financeiro atualizado")
 
 
 @dataclass
@@ -176,6 +189,35 @@ def calculate_signals(
     trend_months = months[:-1] if current_month_partial and len(months) > 1 else months
     trend_latest = trend_months[-1]
     trend_period = trend_latest.month.strftime("%Y-%m")
+
+    avg_income = _average([month.income for month in trend_months[-6:]])
+    avg_expense = _average([month.expense for month in trend_months[-6:]])
+    savings_rate = (avg_income - avg_expense) / avg_income if avg_income else Decimal(0)
+    runway = cash_balance / avg_expense if avg_expense else Decimal(99)
+    signals.append(
+        Signal(
+            signal_id="financial-summary",
+            type="financial_summary",
+            severity="info",
+            ref_period=period,
+            title="Resumo financeiro",
+            body=(
+                f"Receita média de {_brl(avg_income)}, despesas médias de {_brl(avg_expense)} "
+                f"e poupança média de {savings_rate:.0%}. Reserva estimada: {runway:.1f} meses."
+            ),
+            actions=[],
+            evidence={
+                "avg_income": avg_income,
+                "avg_expense": avg_expense,
+                "savings_rate": savings_rate,
+                "runway_months": runway,
+            },
+            evidence_summary=[
+                f"Poupança média: {savings_rate:.0%}",
+                f"Reserva: {runway:.1f} meses",
+            ],
+        )
+    )
 
     category_outliers: list[tuple[str, Decimal, Decimal]] = []
     for category, current in latest.categories.items():
@@ -573,7 +615,13 @@ def calculate_signals(
         )
 
     priority = {"critical": 0, "warning": 1, "info": 2}
-    return sorted(signals, key=lambda signal: priority[signal.severity])
+    return sorted(
+        signals,
+        key=lambda signal: (
+            0 if signal.type == "financial_summary" else 1,
+            priority[signal.severity],
+        ),
+    )
 
 
 async def _financial_data(
@@ -694,7 +742,7 @@ async def _financial_data(
 
 
 async def _narrate(
-    signals: list[Signal], *, allow_external_ai: bool = True
+    signals: list[Signal], *, allow_external_ai: bool = True, context: dict | None = None
 ) -> tuple[list[Narrative], int, int, str]:
     fallback = [
         Narrative.model_validate(
@@ -707,13 +755,12 @@ async def _narrate(
 
     payload = {
         "model": settings.openai_model,
-        "instructions": (
-            "Você é um planejador financeiro doméstico. Reescreva e priorize os sinais em "
-            "português claro, direto e sem alarmismo. Use somente os fatos e valores recebidos. "
-            "Preserve signal_id, type, severity e ref_period. Dê no máximo três ações por sinal."
-        ),
+        "instructions": """Você é o planejador financeiro pessoal do Planna. Analise todos os sinais em conjunto antes de reescrevê-los. Funda sinais correlacionados quando isso tornar o diagnóstico mais útil, preserve o signal_id mais grave e ordene por urgência real. Use o contexto financeiro para calibrar a gravidade, contextualize dezembro, janeiro e julho antes de alertar, e nunca invente fatos. Cada ação deve ser executável nesta semana, com valores concretos e no máximo três por insight. Seja direto, sem alarmismo. Preserve signal_id, type, severity e ref_period. O insight financial_summary deve aparecer primeiro.""",
         "input": json.dumps(
-            [signal.model_dump(mode="json") for signal in signals],
+            {
+                "context": context or {},
+                "signals": [signal.model_dump(mode="json") for signal in signals],
+            },
             ensure_ascii=False,
         ),
         "text": {
@@ -846,8 +893,26 @@ async def refresh_insights(
             User.ai_consent_at.is_(None),
         )
     )
+    household = await db.get(Household, household_id)
+    recent = months[-6:]
+    avg_income = _average([month.income for month in recent]) if recent else Decimal(0)
+    avg_expense = _average([month.expense for month in recent]) if recent else Decimal(0)
     narratives, prompt_tokens, completion_tokens, model = await _narrate(
-        signals, allow_external_ai=allow_external_ai and not missing_consent
+        signals,
+        allow_external_ai=allow_external_ai and not missing_consent,
+        context={
+            "avg_income": _brl(avg_income),
+            "avg_expense": _brl(avg_expense),
+            "savings_rate": f"{((avg_income - avg_expense) / avg_income if avg_income else Decimal(0)):.1%}",
+            "cash_balance": _brl(cash_balance),
+            "debt_payments": _brl(monthly_debt_payments),
+            "runway_months": float(cash_balance / avg_expense) if avg_expense else None,
+            "ref_month": months[-1].month.isoformat() if months else None,
+            "is_partial": True,
+            "user_financial_context": (household.financial_context or "")[:1000]
+            if household
+            else "",
+        },
     )
     signal_by_id = {signal.signal_id: signal for signal in signals}
 

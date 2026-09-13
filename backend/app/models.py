@@ -44,6 +44,7 @@ class Household(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120))
+    financial_context: Mapped[str | None] = mapped_column(String(1000))
 
     members: Mapped[list["HouseholdMember"]] = relationship(back_populates="household")
 

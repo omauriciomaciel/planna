@@ -17,6 +17,10 @@ class Message(BaseModel):
     dev_link: str | None = None
 
 
+class FinancialContextUpdate(BaseModel):
+    financial_context: str = Field(default="", max_length=1000)
+
+
 class MemberRead(BaseModel):
     id: uuid.UUID
     name: str
