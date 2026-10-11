@@ -8,8 +8,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import CurrentAuth
-from app.database import DbSession
+from app.dependencies import CurrentAuth, DbSession
 from app.economic import CASH_EXCLUDED_TYPES
 from app.models import (
     Account,

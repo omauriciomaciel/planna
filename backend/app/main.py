@@ -12,16 +12,16 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.auth import router as auth_router
 from app.config import settings
-from app.database import DbSession
-from app.finance import router as finance_router
-from app.insights import router as insights_router
-from app.invoices import router as invoices_router
-from app.operations import router as operations_router
+from app.dependencies import DbSession
+from app.internal.operations import router as operations_router
+from app.routers.auth import router as auth_router
+from app.routers.finance import router as finance_router
+from app.routers.insights import router as insights_router
+from app.routers.invoices import router as invoices_router
+from app.routers.wealth import router as wealth_router
 from app.schemas import HealthRead
 from app.security import SAFE_METHODS, csrf_origin_allowed, session_cookie_name
-from app.wealth import router as wealth_router
 
 REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
@@ -144,7 +144,7 @@ def health() -> HealthRead:
 async def ready(db: DbSession) -> HealthRead:
     try:
         await db.execute(text("SELECT 1"))
-    except SQLAlchemyError as exc:
+    except (SQLAlchemyError, OSError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Banco de dados indisponível",

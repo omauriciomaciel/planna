@@ -13,9 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import CurrentAuth
 from app.config import settings
-from app.database import DbSession, SessionLocal
+from app.database import SessionLocal
+from app.dependencies import CurrentAuth, DbSession
 from app.economic import economic_type as _economic_type
 from app.economic import normalize_text as _normalized
 from app.models import (

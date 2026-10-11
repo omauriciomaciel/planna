@@ -215,21 +215,26 @@ cd frontend && npm run lint && npm run build
 planna/
   backend/
     app/
-      main.py          # FastAPI app, middlewares, routers
-      auth.py           # Magic link, sessões, autenticação
+      main.py           # FastAPI app, middlewares, health/ready, inclusão dos routers
+      dependencies.py   # Dependências compartilhadas (DbSession, CurrentAuth)
+      routers/
+        auth.py         # Magic link, sessões, autenticação
+        finance.py      # Contas, transações, KPIs, trends, sync Pluggy
+        invoices.py     # Ingestão e conciliação de NFC-e
+        wealth.py       # Patrimônio, ativos, passivos, net worth
+        insights.py     # Sinais determinísticos + narrativa por IA
+      internal/
+        operations.py   # Métricas operacionais (protegidas por token)
       bootstrap.py      # Seed de household e membros
       config.py         # Settings via pydantic-settings
-      database.py       # Engine e sessão async
+      database.py       # Engine e fábrica de sessões async
       models.py         # SQLAlchemy models
       schemas.py        # Pydantic schemas (request/response)
-      finance.py        # Contas, transações, KPIs, trends, sync Pluggy
-      invoices.py       # Ingestão e conciliação de NFC-e
-      wealth.py         # Patrimônio, ativos, passivos, net worth
-      insights.py       # Sinais determinísticos + narrativa por IA
       pluggy.py         # Client HTTP para API Pluggy
       sefaz.py          # Parser de NFC-e via SEFAZ
-      operations.py     # Métricas operacionais
-      security.py       # CSRF, cookies
+      economic.py       # Classificação econômica de transações
+      category_translations.py  # Tradução de categorias Pluggy
+      security.py       # CSRF, cookies, rate limit
     alembic/            # Migrations
     tests/
   frontend/

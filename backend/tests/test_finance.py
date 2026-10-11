@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from app import finance
-from app.finance import decode_cursor, encode_cursor, variation
 from app.models import PluggyItem, Transaction
 from app.pluggy import transaction_values
+from app.routers import finance
+from app.routers.finance import decode_cursor, encode_cursor, variation
 
 
 def test_finance_helpers_preserve_money_signs_and_cursor() -> None:

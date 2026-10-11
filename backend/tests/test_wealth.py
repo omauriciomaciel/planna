@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.wealth import financial_rates, investment_values, loan_values
+from app.routers.wealth import financial_rates, investment_values, loan_values
 
 
 def test_wealth_calculations_and_pluggy_mapping() -> None:

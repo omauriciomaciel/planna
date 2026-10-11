@@ -13,9 +13,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import CurrentAuth
 from app.config import settings
-from app.database import DbSession, SessionLocal
+from app.database import SessionLocal
+from app.dependencies import CurrentAuth, DbSession
 from app.economic import normalize_text
 from app.models import (
     Account,

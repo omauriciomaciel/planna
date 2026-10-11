@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.config import settings
-from app.database import DbSession
+from app.dependencies import DbSession
 from app.models import AIRun, PluggyItem
 from app.schemas import OperationsMetricsRead
 

@@ -5,7 +5,7 @@ from decimal import Decimal
 import httpx
 from pydantic import SecretStr
 
-from app.insights import (
+from app.routers.insights import (
     ActionDraft,
     ExpensePoint,
     MonthSummary,

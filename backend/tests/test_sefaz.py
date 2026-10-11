@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.invoices import _normalize_product, _similarity, choose_match
+from app.routers.invoices import _normalize_product, _similarity, choose_match
 from app.sefaz import SefazError, normalize_nfce_url, parse_brl_decimal, parse_nfce_html
 
 ACCESS_KEY = "27260620300157007403651160000125469449142260"

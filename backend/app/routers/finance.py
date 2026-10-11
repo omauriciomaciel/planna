@@ -12,12 +12,11 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import CurrentAuth
 from app.category_translations import translate_category
 from app.config import settings
-from app.database import DbSession, SessionLocal
+from app.database import SessionLocal
+from app.dependencies import CurrentAuth, DbSession
 from app.economic import CASH_EXCLUDED_TYPES, economic_type
-from app.invoices import reconcile_unmatched_invoices
 from app.models import (
     Account,
     AccountBalanceSnapshot,
@@ -31,6 +30,8 @@ from app.models import (
     User,
 )
 from app.pluggy import PluggyUnavailable, client, transaction_values
+from app.routers.invoices import reconcile_unmatched_invoices
+from app.routers.wealth import record_snapshot, sync_pluggy_wealth
 from app.schemas import (
     AccountRead,
     CategoryCreate,
@@ -53,7 +54,6 @@ from app.schemas import (
     TransactionRead,
     TrendRead,
 )
-from app.wealth import record_snapshot, sync_pluggy_wealth
 
 router = APIRouter(tags=["finance"])
 

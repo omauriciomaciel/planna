@@ -1,7 +1,6 @@
 import asyncio
 import smtplib
 import time
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from typing import Annotated
@@ -10,8 +9,6 @@ from urllib.parse import quote
 from fastapi import (
     APIRouter,
     BackgroundTasks,
-    Cookie,
-    Depends,
     HTTPException,
     Query,
     Request,
@@ -23,8 +20,8 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import DbSession
-from app.models import Household, HouseholdMember, MagicLinkToken, Session, User
+from app.dependencies import CurrentAuth, DbSession
+from app.models import HouseholdMember, MagicLinkToken, Session, User
 from app.schemas import HouseholdRead, MagicLinkRequest, MemberRead, MeRead, Message
 from app.security import (
     email_limiter,
@@ -33,7 +30,6 @@ from app.security import (
     new_secret,
     session_cookie_name,
     sign_cookie,
-    verify_cookie,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -102,43 +98,6 @@ async def issue_magic_link(
 
     link = f"{settings.public_api_url}/auth/callback?token={quote(raw_token)}"
     return normalized, link
-
-
-@dataclass
-class AuthContext:
-    user: User
-    household: Household
-    session: Session
-
-
-async def get_auth_context(
-    db: DbSession,
-    session_cookie: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
-) -> AuthContext:
-    raw_cookie = verify_cookie(session_cookie) if session_cookie else None
-    if raw_cookie is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
-
-    now = datetime.now(UTC)
-    row = (
-        await db.execute(
-            select(User, Household, Session)
-            .join(Session, Session.user_id == User.id)
-            .join(HouseholdMember, HouseholdMember.user_id == User.id)
-            .join(Household, Household.id == HouseholdMember.household_id)
-            .where(
-                Session.cookie_id == hash_secret(raw_cookie),
-                Session.revoked_at.is_(None),
-                Session.expires_at > now,
-            )
-        )
-    ).one_or_none()
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
-    return AuthContext(user=row[0], household=row[1], session=row[2])
-
-
-CurrentAuth = Annotated[AuthContext, Depends(get_auth_context)]
 
 
 @router.post("/magic-link", status_code=status.HTTP_202_ACCEPTED)
